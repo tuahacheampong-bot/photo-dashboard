@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 });
     }
 
-    if (password.length < 8) {
+    const trimmedPassword = password.trim();
+    if (trimmedPassword.length < 8) {
       return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
 
@@ -29,8 +30,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 400 });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password (use trimmed version)
+    const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
 
     // Create user (default role: worker)
     let result;

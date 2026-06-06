@@ -18,24 +18,29 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
 
-    if (password.trim() !== confirmPassword.trim()) {
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
+    if (trimmedPassword !== trimmedConfirmPassword) {
       console.log('Password mismatch:', JSON.stringify(password), JSON.stringify(confirmPassword));
       setError('Passwords do not match');
       setLoading(false);
       return;
     }
 
-    if (password.length < 8) {
+    if (trimmedPassword.length < 8) {
       setError('Password must be at least 8 characters');
       setLoading(false);
       return;
     }
 
     try {
+      const trimmedPassword = password.trim();
+
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password: trimmedPassword }),
       });
 
       const data = await res.json();
@@ -50,7 +55,7 @@ export default function SignupPage() {
       const result = await fetch('/api/auth/signin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password: trimmedPassword }),
       });
 
       if (result.ok) {
@@ -101,14 +106,14 @@ export default function SignupPage() {
               <label className="block text-sm font-bold text-gray-800 mb-1">Password</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none text-gray-900"
-                placeholder="At least 8 characters" required minLength={8} />
+                placeholder="At least 8 characters" required minLength={8} autoComplete="new-password" />
             </div>
 
             <div>
               <label className="block text-sm font-bold text-gray-800 mb-1">Confirm Password</label>
               <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none text-gray-900"
-                placeholder="Confirm your password" required />
+                placeholder="Confirm your password" required autoComplete="new-password" />
             </div>
 
             <button type="submit" disabled={loading}
