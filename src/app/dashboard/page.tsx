@@ -8,11 +8,11 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session) redirect('/login');
 
-  const stats = getDashboardStats();
-  const recentGigs = getRecentGigs(5);
-  const monthlyRevenue = getMonthlyRevenue(6);
-  const monthlyExpenses = getMonthlyExpenses(6);
-  const workerEarnings = getTopWorkerEarnings(5);
+  const stats = await getDashboardStats();
+  const recentGigs = await getRecentGigs(5);
+  const monthlyRevenue = await getMonthlyRevenue(6);
+  const monthlyExpenses = await getMonthlyExpenses(6);
+  const workerEarnings = await getTopWorkerEarnings(5);
 
   const outstandingBalance = stats.outstandingBalance;
   const netProfit = stats.netProfit;

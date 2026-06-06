@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 // Database adapter that works with both local SQLite and Turso (libSQL) on Vercel
 let db: any;
 
-function getDb() {
+async function getDb() {
   if (db) return db;
 
   // Check if running on Vercel (serverless)
@@ -21,8 +21,8 @@ function getDb() {
     // Use Turso (libSQL) on Vercel
     const { createClient } = require('@libsql/client');
     const client = createClient({
-      url: tursoUrl,
-      authToken: tursoToken,
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
     });
     
     // Wrap to match better-sqlite3 API
@@ -61,7 +61,7 @@ function getDb() {
     };
     
     // Initialize database (create tables if not exist)
-    await initializeDatabase(db);
+    await initializeDatabaseAsync(db);
     return db;
   }
 
@@ -236,6 +236,175 @@ function initializeDatabase(db: any) {
   // Seed default owner account (password: admin123)
   const hashedPassword = require('bcryptjs').hashSync('admin123', 10);
   run('INSERT OR IGNORE INTO users (email, name, password, role) VALUES (?, ?, ?, ?)', 
+    'admin@photo.com', 'Business Owner', hashedPassword, 'owner');
+}
+
+async function initializeDatabaseAsync(db: any) {
+  const exec = async (sql: string) => {
+    await db.exec(sql);
+  };
+
+  await exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'worker' CHECK(role IN ('owner', 'worker')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS workers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER UNIQUE,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      skills TEXT NOT NULL DEFAULT 'photographer' CHECK(skills IN ('photographer', 'retoucher', 'both')),
+      rate_per_gig REAL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS gigs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      client_email TEXT,
+      client_phone TEXT,
+      gig_date DATE NOT NULL,
+      location TEXT,
+      description TEXT,
+      total_amount REAL NOT NULL DEFAULT 0,
+      photographer_split REAL DEFAULT 30,
+      retoucher_split REAL DEFAULT 30,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+      invoice_reference TEXT,
+      zoho_invoice_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS gig_workers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gig_id INTEGER NOT NULL,
+      worker_id INTEGER NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('photographer', 'retoucher')),
+      custom_split REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE CASCADE,
+      FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS invoices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gig_id INTEGER,
+      invoice_number TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      client_email TEXT,
+      client_phone TEXT,
+      amount REAL NOT NULL,
+      tax_amount REAL DEFAULT 0,
+      total_amount REAL NOT NULL,
+      amount_paid REAL DEFAULT 0,
+      balance REAL DEFAULT 0,
+      due_date DATE,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'partial', 'overdue', 'cancelled')),
+      source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('zoho', 'manual')),
+      zoho_invoice_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS client_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gig_id INTEGER NOT NULL,
+      invoice_id INTEGER,
+      amount REAL NOT NULL,
+      payment_date DATE NOT NULL,
+      payment_method TEXT DEFAULT 'cash' CHECK(payment_method IN ('cash', 'bank_transfer', 'mobile_money', 'card', 'other')),
+      reference_number TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE CASCADE,
+      FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS worker_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gig_id INTEGER NOT NULL,
+      worker_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      payment_date DATE NOT NULL,
+      payment_method TEXT DEFAULT 'cash' CHECK(payment_method IN ('cash', 'bank_transfer', 'mobile_money', 'card', 'other')),
+      reference_number TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'cancelled')),
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE CASCADE,
+      FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS expense_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_id INTEGER,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL,
+      expense_date DATE NOT NULL,
+      gig_id INTEGER,
+      receipt_reference TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (category_id) REFERENCES expense_categories(id) ON DELETE SET NULL,
+      FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS zoho_settings (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      client_id TEXT,
+      client_secret TEXT,
+      refresh_token TEXT,
+      organization_id TEXT,
+      region TEXT DEFAULT 'com',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_gigs_date ON gigs(gig_date);
+    CREATE INDEX IF NOT EXISTS idx_gigs_status ON gigs(status);
+    CREATE INDEX IF NOT EXISTS idx_client_payments_gig ON client_payments(gig_id);
+    CREATE INDEX IF NOT EXISTS idx_worker_payments_gig ON worker_payments(gig_id);
+    CREATE INDEX IF NOT EXISTS idx_worker_payments_worker ON worker_payments(worker_id);
+    CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
+    CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+  `);
+
+  // Seed default expense categories
+  const run = async (sql: string, ...params: any[]) => {
+    await db.execute(sql, params);
+  };
+
+  const insertCategory = async (name: string) => {
+    await run('INSERT OR IGNORE INTO expense_categories (name, is_default) VALUES (?, 1)', name);
+  };
+
+  const defaultCategories = [
+    'Transport', 'Equipment', 'Props', 'Studio Rent', 'Editing Software',
+    'Internet', 'Printing', 'Marketing', 'Utilities', 'Miscellaneous'
+  ];
+  for (const cat of defaultCategories) {
+    await insertCategory(cat);
+  }
+
+  // Seed default owner account (password: admin123)
+  const hashedPassword = require('bcryptjs').hashSync('admin123', 10);
+  await run('INSERT OR IGNORE INTO users (email, name, password, role) VALUES (?, ?, ?, ?)', 
     'admin@photo.com', 'Business Owner', hashedPassword, 'owner');
 }
 

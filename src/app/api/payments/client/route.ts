@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as {
       gig_id: number;
       invoice_id?: number | null;
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if payment exceeds gig total
-    const gig = db.prepare('SELECT total_amount FROM gigs WHERE id = ?').get(gig_id) as Gig | null;
+    const gig = await db.prepare('SELECT total_amount FROM gigs WHERE id = ?').get(gig_id) as Gig | null;
     if (!gig) {
       return NextResponse.json({ error: 'Gig not found' }, { status: 404 });
     }
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for duplicate payment on same date with same amount
-    const duplicate = db.prepare(
+    const duplicate = await db.prepare(
       'SELECT id FROM client_payments WHERE gig_id = ? AND amount = ? AND payment_date = ?'
     ).get(gig_id, amount, payment_date) as ClientPayment | null;
 
@@ -82,14 +82,14 @@ export async function POST(request: NextRequest) {
         'SELECT COALESCE(SUM(amount), 0) as total FROM client_payments WHERE invoice_id = ?'
       ).get(invoice_id) as SumResult;
 
-      const invoice = db.prepare('SELECT total_amount FROM invoices WHERE id = ?').get(invoice_id) as Invoice | null;
+      const invoice = await db.prepare('SELECT total_amount FROM invoices WHERE id = ?').get(invoice_id) as Invoice | null;
 
       let newStatus = 'partial';
       if (invoice && totalPaid.total >= invoice.total_amount) {
         newStatus = 'paid';
       }
 
-      db.prepare('UPDATE invoices SET status = ? WHERE id = ?').run(newStatus, invoice_id);
+      await db.prepare('UPDATE invoices SET status = ? WHERE id = ?').run(newStatus, invoice_id);
     }
 
     return NextResponse.json({ id: result.lastInsertRowid, message: 'Client payment recorded' });

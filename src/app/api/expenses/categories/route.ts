@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json();
     const { name } = body;
 
@@ -38,7 +38,7 @@ export async function DELETE(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -46,7 +46,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Category ID is required' }, { status: 400 });
     }
 
-    db.prepare('DELETE FROM expense_categories WHERE id = ? AND is_default = 0').run(id);
+    await db.prepare('DELETE FROM expense_categories WHERE id = ? AND is_default = 0').run(id);
     return NextResponse.json({ message: 'Category deleted successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);

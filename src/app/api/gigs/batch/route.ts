@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as { gigs: GigInput[]; defaults?: DefaultsInput };
     const { gigs, defaults } = body;
 

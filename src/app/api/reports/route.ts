@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'summary';
     const period = searchParams.get('period') || 'month';

@@ -23,9 +23,9 @@ export interface ZohoSettings {
   region: string;
 }
 
-export function getZohoSettings(): ZohoSettings | null {
+export async function getZohoSettings(): Promise<ZohoSettings | null> {
   try {
-    const db = getDb();
+    const db = await getDb();
     interface ZohoSettingsRow {
       client_id: string;
       client_secret: string;
@@ -33,7 +33,7 @@ export function getZohoSettings(): ZohoSettings | null {
       organization_id: string;
       region: string;
     }
-    const row = db.prepare('SELECT * FROM zoho_settings WHERE id = 1').get() as ZohoSettingsRow | null;
+    const row = await db.prepare('SELECT * FROM zoho_settings WHERE id = 1').get() as ZohoSettingsRow | null;
     if (!row || !row.client_id) return null;
     return {
       client_id: row.client_id || '',
@@ -47,9 +47,9 @@ export function getZohoSettings(): ZohoSettings | null {
   }
 }
 
-export function saveZohoSettings(s: ZohoSettings): void {
-  const db = getDb();
-  db.prepare(`
+export async function saveZohoSettings(s: ZohoSettings): Promise<void> {
+  const db = await getDb();
+  await db.prepare(`
     INSERT OR REPLACE INTO zoho_settings (id, client_id, client_secret, refresh_token, organization_id, region, updated_at)
     VALUES (1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   `).run(s.client_id, s.client_secret, s.refresh_token, s.organization_id, s.region || 'com');

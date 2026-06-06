@@ -4,17 +4,17 @@ import type { MonthlyData, WorkerEarnings, RecentGig, DashboardStats } from './t
 interface CountResult { count: number; }
 interface SumResult { total: number; }
 
-export function getDashboardStats(): DashboardStats {
-  const db = getDb();
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const db = await getDb();
 
-  const totalGigs = db.prepare('SELECT COUNT(*) as count FROM gigs').get() as CountResult;
-  const completedGigs = db.prepare("SELECT COUNT(*) as count FROM gigs WHERE status = 'completed'").get() as CountResult;
-  const pendingGigs = db.prepare("SELECT COUNT(*) as count FROM gigs WHERE status = 'pending'").get() as CountResult;
+  const totalGigs = await db.prepare('SELECT COUNT(*) as count FROM gigs').get() as CountResult;
+  const completedGigs = await db.prepare("SELECT COUNT(*) as count FROM gigs WHERE status = 'completed'").get() as CountResult;
+  const pendingGigs = await db.prepare("SELECT COUNT(*) as count FROM gigs WHERE status = 'pending'").get() as CountResult;
 
-  const totalRevenue = db.prepare("SELECT COALESCE(SUM(total_amount), 0) as total FROM gigs WHERE status != 'cancelled'").get() as SumResult;
-  const totalExpenses = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses').get() as SumResult;
-  const totalClientPayments = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM client_payments').get() as SumResult;
-  const totalWorkerPayments = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM worker_payments').get() as SumResult;
+  const totalRevenue = await db.prepare("SELECT COALESCE(SUM(total_amount), 0) as total FROM gigs WHERE status != 'cancelled'").get() as SumResult;
+  const totalExpenses = await db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses').get() as SumResult;
+  const totalClientPayments = await db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM client_payments').get() as SumResult;
+  const totalWorkerPayments = await db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM worker_payments').get() as SumResult;
 
   const outstandingBalance = (totalRevenue.total || 0) - (totalClientPayments.total || 0);
   const netProfit = (totalClientPayments.total || 0) - (totalExpenses.total || 0) - (totalWorkerPayments.total || 0);
@@ -32,8 +32,8 @@ export function getDashboardStats(): DashboardStats {
   };
 }
 
-export function getRecentGigs(limit = 5): RecentGig[] {
-  const db = getDb();
+export async function getRecentGigs(limit = 5): Promise<RecentGig[]> {
+  const db = await getDb();
   return db.prepare(`
     SELECT g.*, 
       GROUP_CONCAT(DISTINCT gw.worker_id) as worker_ids
@@ -45,8 +45,8 @@ export function getRecentGigs(limit = 5): RecentGig[] {
   `).all(limit) as RecentGig[];
 }
 
-export function getMonthlyRevenue(months = 6): MonthlyData[] {
-  const db = getDb();
+export async function getMonthlyRevenue(months = 6): Promise<MonthlyData[]> {
+  const db = await getDb();
   return db.prepare(`
     SELECT 
       strftime('%Y-%m', gig_date) as month,
@@ -58,8 +58,8 @@ export function getMonthlyRevenue(months = 6): MonthlyData[] {
   `).all(`-${months} months`) as MonthlyData[];
 }
 
-export function getMonthlyExpenses(months = 6): MonthlyData[] {
-  const db = getDb();
+export async function getMonthlyExpenses(months = 6): Promise<MonthlyData[]> {
+  const db = await getDb();
   return db.prepare(`
     SELECT 
       strftime('%Y-%m', expense_date) as month,
@@ -71,8 +71,8 @@ export function getMonthlyExpenses(months = 6): MonthlyData[] {
   `).all(`-${months} months`) as MonthlyData[];
 }
 
-export function getTopWorkerEarnings(limit = 5): WorkerEarnings[] {
-  const db = getDb();
+export async function getTopWorkerEarnings(limit = 5): Promise<WorkerEarnings[]> {
+  const db = await getDb();
   return db.prepare(`
     SELECT w.name, COALESCE(SUM(wp.amount), 0) as total_earned
     FROM workers w

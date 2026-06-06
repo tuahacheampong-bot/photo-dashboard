@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as { invoice_ids: number[]; defaults?: DefaultsInput };
     const { invoice_ids, defaults } = body;
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         const gigId = Number(gigResult.lastInsertRowid);
 
         // Link invoice to gig
-        db.prepare('UPDATE invoices SET gig_id = ? WHERE id = ?').run(gigId, invId);
+        await db.prepare('UPDATE invoices SET gig_id = ? WHERE id = ?').run(gigId, invId);
 
         // If invoice has been paid, record the payment
         if (invoice.amount_paid > 0) {

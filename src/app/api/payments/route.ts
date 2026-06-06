@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'all'; // client, worker, all
     const status = searchParams.get('status');
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       }
       query += ' ORDER BY cp.payment_date DESC';
 
-      clientPayments = db.prepare(query).all(...params) as ClientPaymentDetail[];
+      clientPayments = await db.prepare(query).all(...params) as ClientPaymentDetail[];
     }
 
     if (type === 'worker' || type === 'all') {
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       }
       query += ' ORDER BY wp.payment_date DESC';
 
-      workerPayments = db.prepare(query).all(...params) as WorkerPaymentDetail[];
+      workerPayments = await db.prepare(query).all(...params) as WorkerPaymentDetail[];
     }
 
     return NextResponse.json({ client_payments: clientPayments, worker_payments: workerPayments });

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const dateFrom = searchParams.get('date_from');
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     query += ' GROUP BY g.id ORDER BY g.gig_date ASC';
 
-    const gigs = db.prepare(query).all(...params) as OpenGig[];
+    const gigs = await db.prepare(query).all(...params) as OpenGig[];
     return NextResponse.json(gigs);
   } catch (error) {
     console.error('Error fetching open gigs:', error);

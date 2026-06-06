@@ -31,8 +31,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const db = getDb();
-        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(
+        const db = await getDb();
+        const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(
           credentials.email as string
         ) as UserWithRole | null;
 

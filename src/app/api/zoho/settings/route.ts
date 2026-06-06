@@ -6,7 +6,7 @@ export async function GET() {
   const authResult = await requireAuth();
   if (authResult.error) return authResult.error;
 
-  const s = getZohoSettings();
+  const s = await getZohoSettings();
   if (!s) return NextResponse.json({ configured: false });
   return NextResponse.json({
     configured: true,
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (authResult.error) return authResult.error;
 
   const body = await req.json();
-  const existing = getZohoSettings();
+  const existing = await getZohoSettings();
 
   const settings = {
     client_id: body.client_id || existing?.client_id || '',
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     region: body.region || existing?.region || 'com',
   };
 
-  saveZohoSettings(settings);
+  await saveZohoSettings(settings);
   return NextResponse.json({ ok: true });
 }
 
@@ -43,7 +43,7 @@ export async function PUT() {
   const authResult = await requireOwner();
   if (authResult.error) return authResult.error;
 
-  const s = getZohoSettings();
+  const s = await getZohoSettings();
   if (!s) return NextResponse.json({ ok: false, message: 'Not configured' });
 
   const result = await testConnection(s);

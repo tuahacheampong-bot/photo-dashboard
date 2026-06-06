@@ -43,20 +43,20 @@ export async function GET(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
 
     if (!id || isNaN(Number(id))) {
       return NextResponse.json({ error: 'Invalid worker ID' }, { status: 400 });
     }
 
-    const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(id) as Worker | null;
+    const worker = await db.prepare('SELECT * FROM workers WHERE id = ?').get(id) as Worker | null;
     if (!worker) {
       return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
     }
 
     // Get all gig assignments with payment breakdown
-    const gigAssignments = db.prepare(`
+    const gigAssignments = await db.prepare(`
       SELECT gw.gig_id, gw.role, gw.custom_split,
              g.title, g.gig_date, g.total_amount, g.photographer_split, g.retoucher_split, g.status
       FROM gig_workers gw
@@ -136,7 +136,7 @@ export async function GET(
     });
 
     // Get all individual payment records
-    const paymentHistory = db.prepare(`
+    const paymentHistory = await db.prepare(`
       SELECT wp.*, g.title as gig_title
       FROM worker_payments wp
       JOIN gigs g ON wp.gig_id = g.id
@@ -167,7 +167,7 @@ export async function PUT(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
 
     if (!id || isNaN(Number(id))) {
@@ -193,7 +193,7 @@ export async function PUT(
       return NextResponse.json({ error: err }, { status: 400 });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE workers SET
         name = ?, email = ?, phone = ?, skills = ?, rate_per_gig = ?
       WHERE id = ?
@@ -215,14 +215,14 @@ export async function DELETE(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
 
     if (!id || isNaN(Number(id))) {
       return NextResponse.json({ error: 'Invalid worker ID' }, { status: 400 });
     }
 
-    db.prepare('DELETE FROM workers WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM workers WHERE id = ?').run(id);
     return NextResponse.json({ message: 'Worker deleted successfully' });
   } catch (error) {
     console.error('Error deleting worker:', error);

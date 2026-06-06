@@ -38,7 +38,7 @@ export async function GET(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
 
     if (!id || isNaN(Number(id))) {
@@ -60,7 +60,7 @@ export async function GET(
     }
 
     // Get workers assigned to this gig
-    const workers = db.prepare(`
+    const workers = await db.prepare(`
       SELECT gw.*, w.name as worker_name, w.skills, w.phone, w.email
       FROM gig_workers gw
       JOIN workers w ON gw.worker_id = w.id
@@ -68,12 +68,12 @@ export async function GET(
     `).all(id) as GigWorkerDetail[];
 
     // Get client payments for this gig
-    const payments = db.prepare(`
+    const payments = await db.prepare(`
       SELECT * FROM client_payments WHERE gig_id = ? ORDER BY payment_date DESC
     `).all(id) as ClientPaymentDetail[];
 
     // Get worker payments for this gig
-    const workerPayments = db.prepare(`
+    const workerPayments = await db.prepare(`
       SELECT wp.*, w.name as worker_name
       FROM worker_payments wp
       JOIN workers w ON wp.worker_id = w.id
@@ -135,7 +135,7 @@ export async function PUT(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
 
     if (!id || isNaN(Number(id))) {
@@ -178,7 +178,7 @@ export async function PUT(
       return NextResponse.json({ error: err }, { status: 400 });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE gigs SET
         title = ?, client_name = ?, client_email = ?, client_phone = ?,
         gig_date = ?, location = ?, description = ?, total_amount = ?,
@@ -194,7 +194,7 @@ export async function PUT(
 
     // Update workers if provided
     if (workers !== undefined) {
-      db.prepare('DELETE FROM gig_workers WHERE gig_id = ?').run(id);
+      await db.prepare('DELETE FROM gig_workers WHERE gig_id = ?').run(id);
       if (workers && workers.length > 0) {
         const insertWorker = db.prepare(
           'INSERT INTO gig_workers (gig_id, worker_id, role, custom_split) VALUES (?, ?, ?, ?)'
@@ -221,14 +221,14 @@ export async function DELETE(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
 
     if (!id || isNaN(Number(id))) {
       return NextResponse.json({ error: 'Invalid gig ID' }, { status: 400 });
     }
 
-    db.prepare('DELETE FROM gigs WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM gigs WHERE id = ?').run(id);
     return NextResponse.json({ message: 'Gig deleted successfully' });
   } catch (error) {
     console.error('Error deleting gig:', error);

@@ -19,6 +19,7 @@ export default function SignupPage() {
     setLoading(true);
 
     if (password.trim() !== confirmPassword.trim()) {
+      console.log('Password mismatch:', JSON.stringify(password), JSON.stringify(confirmPassword));
       setError('Passwords do not match');
       setLoading(false);
       return;

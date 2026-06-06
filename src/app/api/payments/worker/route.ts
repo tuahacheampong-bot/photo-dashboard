@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as {
       gig_id: number;
       worker_id: number;
@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: err }, { status: 400 });
     }
 
-    const gig = db.prepare('SELECT * FROM gigs WHERE id = ?').get(gig_id) as Gig | null;
+    const gig = await db.prepare('SELECT * FROM gigs WHERE id = ?').get(gig_id) as Gig | null;
     if (!gig) {
       return NextResponse.json({ error: 'Gig not found' }, { status: 404 });
     }
 
     // Get ALL roles for this worker on this gig
-    const workerRoles = db.prepare(
+    const workerRoles = await db.prepare(
       'SELECT role FROM gig_workers WHERE gig_id = ? AND worker_id = ?'
     ).all(gig_id, worker_id) as WorkerRole[];
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get full gig_worker rows to check for custom_split
-    const workerAssignments = db.prepare(
+    const workerAssignments = await db.prepare(
       'SELECT role, custom_split FROM gig_workers WHERE gig_id = ? AND worker_id = ?'
     ).all(gig_id, worker_id) as WorkerAssignment[];
 
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Prevent duplicate payment for same date
-    const existingSameDate = db.prepare(
+    const existingSameDate = await db.prepare(
       'SELECT id FROM worker_payments WHERE gig_id = ? AND worker_id = ? AND payment_date = ?'
     ).get(gig_id, worker_id, payment_date) as WorkerPayment | null;
 
@@ -112,7 +112,7 @@ export async function DELETE(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -120,12 +120,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Payment ID is required' }, { status: 400 });
     }
 
-    const payment = db.prepare('SELECT * FROM worker_payments WHERE id = ?').get(id) as WorkerPayment | null;
+    const payment = await db.prepare('SELECT * FROM worker_payments WHERE id = ?').get(id) as WorkerPayment | null;
     if (!payment) {
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
     }
 
-    db.prepare('DELETE FROM worker_payments WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM worker_payments WHERE id = ?').run(id);
     return NextResponse.json({ message: 'Payment deleted successfully' });
   } catch (error) {
     console.error('Error deleting worker payment:', error);

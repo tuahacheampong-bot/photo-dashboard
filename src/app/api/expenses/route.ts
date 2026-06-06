@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
     const dateFrom = searchParams.get('date_from');
@@ -59,10 +59,10 @@ export async function GET(request: NextRequest) {
 
     query += ' ORDER BY e.expense_date DESC';
 
-    const expenses = db.prepare(query).all(...params) as ExpenseWithDetails[];
+    const expenses = await db.prepare(query).all(...params) as ExpenseWithDetails[];
 
     // Get categories
-    const categories = db.prepare('SELECT * FROM expense_categories ORDER BY name').all() as ExpenseCategory[];
+    const categories = await db.prepare('SELECT * FROM expense_categories ORDER BY name').all() as ExpenseCategory[];
 
     // Get summary
     const totalExpenses = db.prepare(
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as {
       category_id?: number | null;
       description: string;

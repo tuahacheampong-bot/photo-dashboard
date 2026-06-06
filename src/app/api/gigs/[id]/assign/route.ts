@@ -14,7 +14,7 @@ export async function POST(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
 
     if (!id || isNaN(Number(id))) {
@@ -34,19 +34,19 @@ export async function POST(
     }
 
     // Check gig exists and is not cancelled
-    const gig = db.prepare("SELECT * FROM gigs WHERE id = ? AND status != 'cancelled'").get(id) as Gig | null;
+    const gig = await db.prepare("SELECT * FROM gigs WHERE id = ? AND status != 'cancelled'").get(id) as Gig | null;
     if (!gig) {
       return NextResponse.json({ error: 'Gig not found or cancelled' }, { status: 404 });
     }
 
     // Check worker exists
-    const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(worker_id) as Worker | null;
+    const worker = await db.prepare('SELECT * FROM workers WHERE id = ?').get(worker_id) as Worker | null;
     if (!worker) {
       return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
     }
 
     // Check if already assigned to this specific role
-    const existing = db.prepare(
+    const existing = await db.prepare(
       'SELECT id FROM gig_workers WHERE gig_id = ? AND worker_id = ? AND role = ?'
     ).get(id, worker_id, role);
 
@@ -60,7 +60,7 @@ export async function POST(
     ).run(id, worker_id, role);
 
     // Check what roles they now have
-    const allRoles = db.prepare(
+    const allRoles = await db.prepare(
       'SELECT role FROM gig_workers WHERE gig_id = ? AND worker_id = ?'
     ).all(id, worker_id) as RoleResult[];
 
@@ -82,7 +82,7 @@ export async function DELETE(
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const workerId = searchParams.get('worker_id');
@@ -97,7 +97,7 @@ export async function DELETE(
     }
 
     // Check if there are payments for this worker on this gig
-    const payments = db.prepare(
+    const payments = await db.prepare(
       'SELECT id FROM worker_payments WHERE gig_id = ? AND worker_id = ? LIMIT 1'
     ).get(id, workerId);
 
@@ -109,9 +109,9 @@ export async function DELETE(
     }
 
     if (role) {
-      db.prepare('DELETE FROM gig_workers WHERE gig_id = ? AND worker_id = ? AND role = ?').run(id, workerId, role);
+      await db.prepare('DELETE FROM gig_workers WHERE gig_id = ? AND worker_id = ? AND role = ?').run(id, workerId, role);
     } else {
-      db.prepare('DELETE FROM gig_workers WHERE gig_id = ? AND worker_id = ?').run(id, workerId);
+      await db.prepare('DELETE FROM gig_workers WHERE gig_id = ? AND worker_id = ?').run(id, workerId);
     }
 
     return NextResponse.json({ message: 'Assignment removed' });

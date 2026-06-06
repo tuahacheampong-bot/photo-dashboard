@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const search = searchParams.get('search');
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     query += ' GROUP BY g.id ORDER BY g.gig_date DESC';
 
-    const gigs = db.prepare(query).all(...params) as GigWithDetails[];
+    const gigs = await db.prepare(query).all(...params) as GigWithDetails[];
     return NextResponse.json(gigs);
   } catch (error) {
     console.error('Error fetching gigs:', error);
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as {
       title: string;
       client_name: string;
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       invoiceId = invResult.lastInsertRowid;
 
       // Try to create invoice on Zoho
-      const zohoSettings = getZohoSettings();
+      const zohoSettings = await getZohoSettings();
       if (zohoSettings) {
         try {
           const zohoResult = await createZohoInvoice(zohoSettings, {
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Link invoice to gig
-      db.prepare('UPDATE gigs SET invoice_reference = ? WHERE id = ?').run(invNumber, gigId);
+      await db.prepare('UPDATE gigs SET invoice_reference = ? WHERE id = ?').run(invNumber, gigId);
     }
 
     return NextResponse.json({ id: gigId, invoice_id: invoiceId, message: 'Gig created successfully' });

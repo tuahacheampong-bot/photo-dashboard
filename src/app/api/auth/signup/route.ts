@@ -14,12 +14,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
 
     // Check if user already exists
     let existing;
     try {
-      existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+      existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     } catch (dbError) {
       console.error('Database error checking existing user:', dbError);
       return NextResponse.json({ error: 'Database connection failed. Please configure Turso database.' }, { status: 500 });

@@ -20,7 +20,7 @@ export async function POST() {
 
   try {
     const zohoInvoices = await fetchAllInvoices(settings) as ZohoInvoice[];
-    const db = getDb();
+    const db = await getDb();
     let created = 0;
     let updated = 0;
     let paymentsRecorded = 0;
@@ -30,10 +30,10 @@ export async function POST() {
       // For paid invoices, balance should always be 0
       const invoiceBalance = inv.status === 'paid' ? 0 : inv.balance;
       const invoiceAmountPaid = inv.status === 'paid' ? inv.total : amountPaid;
-      const existing = db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as InvoiceWithGig | null;
+      const existing = await db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as InvoiceWithGig | null;
 
       if (existing) {
-        db.prepare(`
+        await db.prepare(`
           UPDATE invoices SET
             invoice_number = ?, client_name = ?, amount = ?,
             total_amount = ?, amount_paid = ?, balance = ?,
@@ -51,10 +51,10 @@ export async function POST() {
 
       // Auto-record client payment if invoice has been paid or partially paid
       if (invoiceAmountPaid > 0) {
-        const invoice = db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as InvoiceWithGig | null;
+        const invoice = await db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as InvoiceWithGig | null;
         if (invoice && invoice.gig_id) {
           // Check if payment already recorded for this invoice
-          const existingPayment = db.prepare(
+          const existingPayment = await db.prepare(
             'SELECT id FROM client_payments WHERE invoice_id = ?'
           ).get(invoice.id);
 

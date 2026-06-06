@@ -3,11 +3,11 @@ import getDb from '@/lib/db';
 
 export async function GET() {
   try {
-    const db = getDb();
+    const db = await getDb();
     
     // Test database connection
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    const tables = await db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
     
     return NextResponse.json({
       status: 'ok',

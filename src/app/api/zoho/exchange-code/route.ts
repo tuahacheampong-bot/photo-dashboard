@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get region from saved settings or default to com
-    const settings = getZohoSettings();
+    const settings = await getZohoSettings();
     const region = settings?.region || 'com';
 
     const tokens = await exchangeCodeForTokens(code, client_id, client_secret, region, REDIRECT_URI);

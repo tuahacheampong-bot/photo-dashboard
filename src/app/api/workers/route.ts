@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const skill = searchParams.get('skill');
@@ -59,12 +59,12 @@ export async function GET(request: NextRequest) {
 
     query += ' ORDER BY w.name';
 
-    const workers = db.prepare(query).all(...params) as Worker[];
+    const workers = await db.prepare(query).all(...params) as Worker[];
 
     // Compute outstanding for each worker
-    const enriched = workers.map((w) => {
+    const enriched = await Promise.all(workers.map(async (w) => {
       // Get all gigs this worker is assigned to
-      const gigAssignments = db.prepare(`
+      const gigAssignments = await db.prepare(`
         SELECT gw.gig_id, gw.role, gw.custom_split, g.total_amount, g.photographer_split, g.retoucher_split, g.status
         FROM gig_workers gw
         JOIN gigs g ON gw.gig_id = g.id
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
               ? assignment.photographer_split
               : assignment.retoucher_split;
 
-          const roleCount = db.prepare(
+          const roleCount = await db.prepare(
             'SELECT COUNT(*) as count FROM gig_workers WHERE gig_id = ? AND role = ?'
           ).get(assignment.gig_id, assignment.role) as CountResult;
 
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Total paid to this worker
-      const paidResult = db.prepare(
+      const paidResult = await db.prepare(
         "SELECT COALESCE(SUM(amount), 0) as total FROM worker_payments WHERE worker_id = ? AND status = 'paid'"
       ).get(w.id) as SumResult;
 
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
         outstanding,
         gig_count: gigCount,
       } as WorkerEnriched;
-    });
+    }));
 
     return NextResponse.json(enriched);
   } catch (error) {
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as {
       name: string;
       email?: string | null;

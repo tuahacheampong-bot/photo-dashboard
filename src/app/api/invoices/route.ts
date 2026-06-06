@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const source = searchParams.get('source');
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     }
     query += ' ORDER BY i.created_at DESC';
 
-    const invoices = db.prepare(query).all(...params) as InvoiceWithGig[];
+    const invoices = await db.prepare(query).all(...params) as InvoiceWithGig[];
     return NextResponse.json(invoices);
   } catch (error) {
     console.error('Error fetching invoices:', error);
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const body = await request.json() as {
       action?: string;
       invoice_id?: number;
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'invoice_id is required' }, { status: 400 });
       }
 
-      const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoice_id) as Invoice | null;
+      const invoice = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoice_id) as Invoice | null;
       if (!invoice) {
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
       }
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       const gigId = gigResult.lastInsertRowid;
 
       // Link invoice to gig
-      db.prepare('UPDATE invoices SET gig_id = ? WHERE id = ?').run(gigId, invoice_id);
+      await db.prepare('UPDATE invoices SET gig_id = ? WHERE id = ?').run(gigId, invoice_id);
 
       // Add workers if provided
       if (workers && workers.length > 0) {
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       // If invoice has been paid, record the payment
       if (invoice.amount_paid > 0) {
         // Check for existing payment for this gig
-        const existingPayment = db.prepare(
+        const existingPayment = await db.prepare(
           'SELECT id FROM client_payments WHERE gig_id = ?'
         ).get(gigId);
 
@@ -209,7 +209,7 @@ export async function DELETE(request: NextRequest) {
   if (authResult.error) return authResult.error;
 
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -218,10 +218,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Unlink from gig if linked
-    db.prepare('UPDATE invoices SET gig_id = NULL WHERE id = ?').run(id);
+    await db.prepare('UPDATE invoices SET gig_id = NULL WHERE id = ?').run(id);
 
     // Delete the invoice
-    db.prepare('DELETE FROM invoices WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM invoices WHERE id = ?').run(id);
 
     return NextResponse.json({ ok: true, message: 'Invoice deleted' });
   } catch (error) {
