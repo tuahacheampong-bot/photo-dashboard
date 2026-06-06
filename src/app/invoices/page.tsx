@@ -59,6 +59,7 @@ export default function InvoicesPage() {
   const [showBatchModal, setShowBatchModal] = useState(false);
 
   const loadedRef = useRef(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -66,7 +67,7 @@ export default function InvoicesPage() {
       const p = new URLSearchParams();
       if (statusFilter !== 'all') p.set('status', statusFilter);
       if (search) p.set('search', search);
-      const res = await fetch(`/api/invoices?${p}`);
+      const res = await fetch(`/api/invoices?${p}&_=${refreshKey}`);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setInvoices(Array.isArray(data) ? data : []);
@@ -75,6 +76,8 @@ export default function InvoicesPage() {
     }
     setLoading(false);
   };
+
+  const refreshInvoices = () => setRefreshKey(k => k + 1);
 
   useEffect(() => {
     if (!loadedRef.current) {
@@ -85,7 +88,7 @@ export default function InvoicesPage() {
         .then((d: ZohoSettings) => setZohoReady(d.configured && d.refresh_token !== '***'))
         .catch(() => {});
     }
-  }, [statusFilter, search, fetchInvoices]);
+  }, [statusFilter, search, refreshKey, fetchInvoices]);
 
   const sync = async () => {
     setSyncing(true);
@@ -96,7 +99,7 @@ export default function InvoicesPage() {
       if (res.ok) {
         setSyncOk(true);
         setSyncMsg(`Synced: ${d.created} new, ${d.updated} updated, ${d.paymentsRecorded} payments recorded`);
-        fetchInvoices();
+        refreshInvoices();
       } else {
         setSyncOk(false);
         setSyncMsg(d.error || 'Sync failed');
@@ -118,7 +121,7 @@ export default function InvoicesPage() {
     const result = await res.json() as CreateGigResult;
     if (res.ok) {
       setShowGigModal(null);
-      fetchInvoices();
+      refreshInvoices();
       window.location.href = `/gigs/${result.gig_id}`;
     } else if (result.gig_id) {
       window.location.href = `/gigs/${result.gig_id}`;
@@ -137,7 +140,7 @@ export default function InvoicesPage() {
   const deleteInvoice = async (id: number) => {
     if (!confirm('Delete this invoice?')) return;
     const res = await fetch(`/api/invoices?id=${id}`, { method: 'DELETE' });
-    if (res.ok) fetchInvoices();
+    if (res.ok) refreshInvoices();
   };
 
   // Invoices eligible for gig creation (no gig linked)
