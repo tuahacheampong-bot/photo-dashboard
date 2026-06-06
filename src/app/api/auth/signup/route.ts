@@ -17,7 +17,14 @@ export async function POST(request: NextRequest) {
     const db = getDb();
 
     // Check if user already exists
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    let existing;
+    try {
+      existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    } catch (dbError) {
+      console.error('Database error checking existing user:', dbError);
+      return NextResponse.json({ error: 'Database connection failed. Please configure Turso database.' }, { status: 500 });
+    }
+    
     if (existing) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 400 });
     }
@@ -26,9 +33,15 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user (default role: worker)
-    const result = db.prepare(
-      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)'
-    ).run(name, email, hashedPassword, 'worker');
+    let result;
+    try {
+      result = db.prepare(
+        'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)'
+      ).run(name, email, hashedPassword, 'worker');
+    } catch (dbError) {
+      console.error('Database error creating user:', dbError);
+      return NextResponse.json({ error: 'Failed to create user in database' }, { status: 500 });
+    }
 
     return NextResponse.json({ 
       message: 'Account created successfully',
