@@ -20,24 +20,48 @@ function getDb() {
     }
     // Use Turso (libSQL) on Vercel
     const { createClient } = require('@libsql/client');
-    db = createClient({
+    const client = createClient({
       url: tursoUrl,
       authToken: tursoToken,
     });
     
     // Wrap to match better-sqlite3 API
-    const originalExecute = db.execute.bind(db);
-    db.prepare = (sql: string) => {
-      return {
-        run: (...params: any[]) => originalExecute(sql, params),
-        get: (...params: any[]) => originalExecute(sql, params).then((r: any) => r.rows[0]),
-        all: (...params: any[]) => originalExecute(sql, params).then((r: any) => r.rows),
-        exec: (sql: string) => originalExecute(sql),
-      };
+    db = {
+      execute: async (sql: string, params: any[] = []) => {
+        const result = await client.execute({ sql, args: params });
+        return result;
+      },
+      prepare: (sql: string) => {
+        return {
+          run: async (...params: any[]) => {
+            const result = await client.execute({ sql, args: params });
+            return { 
+              changes: result.rowsAffected || 0, 
+              lastInsertRowid: result.lastInsertRowid || 0 
+            };
+          },
+          get: async (...params: any[]) => {
+            const result = await client.execute({ sql, args: params });
+            return result.rows[0] || null;
+          },
+          all: async (...params: any[]) => {
+            const result = await client.execute({ sql, args: params });
+            return result.rows || [];
+          },
+          exec: async (sql: string) => {
+            const result = await client.execute({ sql, args: [] });
+            return { changes: result.rowsAffected || 0 };
+          },
+        };
+      },
+      exec: async (sql: string) => {
+        const result = await client.execute({ sql, args: [] });
+        return { changes: result.rowsAffected || 0 };
+      },
     };
-    db.exec = (sql: string) => originalExecute(sql);
     
-    initializeDatabase(db);
+    // Initialize database (create tables if not exist)
+    await initializeDatabase(db);
     return db;
   }
 
