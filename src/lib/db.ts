@@ -1,23 +1,55 @@
-import Database from 'better-sqlite3';
-import path from 'path';
 import bcrypt from 'bcryptjs';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'photo-dashboard.db');
+// Database adapter that works with both local SQLite and Turso (libSQL) on Vercel
+let db: any;
 
-let db: Database.Database;
+function getDb() {
+  if (db) return db;
 
-function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+  // Check if running on Vercel (serverless)
+  const isVercel = process.env.VERCEL === '1';
+  const tursoUrl = process.env.TURSO_DATABASE_URL;
+  const tursoToken = process.env.TURSO_AUTH_TOKEN;
+
+  if (isVercel && tursoUrl && tursoToken) {
+    // Use Turso (libSQL) on Vercel
+    const { createClient } = require('@libsql/client');
+    db = createClient({
+      url: tursoUrl,
+      authToken: tursoToken,
+    });
+    
+    // Wrap to match better-sqlite3 API
+    const originalExecute = db.execute.bind(db);
+    db.prepare = (sql: string) => {
+      return {
+        run: (...params: any[]) => originalExecute(sql, params),
+        get: (...params: any[]) => originalExecute(sql, params).then((r: any) => r.rows[0]),
+        all: (...params: any[]) => originalExecute(sql, params).then((r: any) => r.rows),
+        exec: (sql: string) => originalExecute(sql),
+      };
+    };
+    db.exec = (sql: string) => originalExecute(sql);
+    
     initializeDatabase(db);
+    return db;
   }
+
+  // Local development: use better-sqlite3
+  const Database = require('better-sqlite3');
+  const path = require('path');
+  const DB_PATH = path.join(process.cwd(), 'data', 'photo-dashboard.db');
+  
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  initializeDatabase(db);
   return db;
 }
 
-function initializeDatabase(db: Database.Database) {
-  db.exec(`
+function initializeDatabase(db: any) {
+  const exec = db.exec || db.exec?.bind(db) || ((sql: string) => db.execute(sql));
+  exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
@@ -159,9 +191,10 @@ function initializeDatabase(db: Database.Database) {
   `);
 
   // Seed default expense categories
-  const insertCategory = db.prepare(
-    'INSERT OR IGNORE INTO expense_categories (name, is_default) VALUES (?, 1)'
-  );
+  const run = db.run || ((sql: string, ...params: any[]) => db.execute(sql, params));
+  const insertCategory = db.prepare ? db.prepare('INSERT OR IGNORE INTO expense_categories (name, is_default) VALUES (?, 1)') : 
+    { run: (name: string) => run('INSERT OR IGNORE INTO expense_categories (name, is_default) VALUES (?, 1)', name) };
+  
   const defaultCategories = [
     'Transport', 'Equipment', 'Props', 'Studio Rent', 'Editing Software',
     'Internet', 'Printing', 'Marketing', 'Utilities', 'Miscellaneous'
@@ -171,10 +204,9 @@ function initializeDatabase(db: Database.Database) {
   }
 
   // Seed default owner account (password: admin123)
-  const hashedPassword = bcrypt.hashSync('admin123', 10);
-  db.prepare(
-    'INSERT OR IGNORE INTO users (email, name, password, role) VALUES (?, ?, ?, ?)'
-  ).run('admin@photo.com', 'Business Owner', hashedPassword, 'owner');
+  const hashedPassword = require('bcryptjs').hashSync('admin123', 10);
+  run('INSERT OR IGNORE INTO users (email, name, password, role) VALUES (?, ?, ?, ?)', 
+    'admin@photo.com', 'Business Owner', hashedPassword, 'owner');
 }
 
 export default getDb;
