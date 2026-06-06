@@ -13,7 +13,7 @@ export async function POST() {
   const authResult = await requireOwner();
   if (authResult.error) return authResult.error;
 
-  const settings = getZohoSettings();
+  const settings = await getZohoSettings();
   if (!settings) {
     return NextResponse.json({ error: 'Zoho not configured' }, { status: 400 });
   }
