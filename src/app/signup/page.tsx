@@ -18,7 +18,7 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
 
-    if (password !== confirmPassword) {
+    if (password.trim() !== confirmPassword.trim()) {
       setError('Passwords do not match');
       setLoading(false);
       return;
