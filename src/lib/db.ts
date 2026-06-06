@@ -240,21 +240,16 @@ function initializeDatabase(db: any) {
 }
 
 async function initializeDatabaseAsync(db: any) {
-  const exec = async (sql: string) => {
-    await db.exec(sql);
-  };
-
-  await exec(`
-    CREATE TABLE IF NOT EXISTS users (
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
       password TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'worker' CHECK(role IN ('owner', 'worker')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS workers (
+    )`,
+    `CREATE TABLE IF NOT EXISTS workers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER UNIQUE,
       name TEXT NOT NULL,
@@ -264,9 +259,8 @@ async function initializeDatabaseAsync(db: any) {
       rate_per_gig REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS gigs (
+    )`,
+    `CREATE TABLE IF NOT EXISTS gigs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       client_name TEXT NOT NULL,
@@ -283,9 +277,8 @@ async function initializeDatabaseAsync(db: any) {
       zoho_invoice_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS gig_workers (
+    )`,
+    `CREATE TABLE IF NOT EXISTS gig_workers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       gig_id INTEGER NOT NULL,
       worker_id INTEGER NOT NULL,
@@ -294,9 +287,8 @@ async function initializeDatabaseAsync(db: any) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE CASCADE,
       FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS invoices (
+    )`,
+    `CREATE TABLE IF NOT EXISTS invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       gig_id INTEGER,
       invoice_number TEXT NOT NULL,
@@ -314,9 +306,8 @@ async function initializeDatabaseAsync(db: any) {
       zoho_invoice_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS client_payments (
+    )`,
+    `CREATE TABLE IF NOT EXISTS client_payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       gig_id INTEGER NOT NULL,
       invoice_id INTEGER,
@@ -328,9 +319,8 @@ async function initializeDatabaseAsync(db: any) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE CASCADE,
       FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS worker_payments (
+    )`,
+    `CREATE TABLE IF NOT EXISTS worker_payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       gig_id INTEGER NOT NULL,
       worker_id INTEGER NOT NULL,
@@ -343,16 +333,14 @@ async function initializeDatabaseAsync(db: any) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE CASCADE,
       FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS expense_categories (
+    )`,
+    `CREATE TABLE IF NOT EXISTS expense_categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
       is_default INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS expenses (
+    )`,
+    `CREATE TABLE IF NOT EXISTS expenses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       category_id INTEGER,
       description TEXT NOT NULL,
@@ -364,9 +352,8 @@ async function initializeDatabaseAsync(db: any) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (category_id) REFERENCES expense_categories(id) ON DELETE SET NULL,
       FOREIGN KEY (gig_id) REFERENCES gigs(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS zoho_settings (
+    )`,
+    `CREATE TABLE IF NOT EXISTS zoho_settings (
       id INTEGER PRIMARY KEY DEFAULT 1,
       client_id TEXT,
       client_secret TEXT,
@@ -374,16 +361,19 @@ async function initializeDatabaseAsync(db: any) {
       organization_id TEXT,
       region TEXT DEFAULT 'com',
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_gigs_date ON gigs(gig_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_gigs_status ON gigs(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_client_payments_gig ON client_payments(gig_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_worker_payments_gig ON worker_payments(gig_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_worker_payments_worker ON worker_payments(worker_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`
+  ];
 
-    CREATE INDEX IF NOT EXISTS idx_gigs_date ON gigs(gig_date);
-    CREATE INDEX IF NOT EXISTS idx_gigs_status ON gigs(status);
-    CREATE INDEX IF NOT EXISTS idx_client_payments_gig ON client_payments(gig_id);
-    CREATE INDEX IF NOT EXISTS idx_worker_payments_gig ON worker_payments(gig_id);
-    CREATE INDEX IF NOT EXISTS idx_worker_payments_worker ON worker_payments(worker_id);
-    CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
-    CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
-  `);
+  for (const sql of statements) {
+    await db.exec(sql);
+  }
 
   // Seed default expense categories
   const run = async (sql: string, ...params: any[]) => {
