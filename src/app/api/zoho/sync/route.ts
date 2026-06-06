@@ -42,7 +42,7 @@ export async function POST() {
         `).run(inv.invoice_number, inv.customer_name, inv.total, inv.total, invoiceAmountPaid, invoiceBalance, inv.due_date || null, inv.status, inv.zoho_id);
         updated++;
       } else {
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO invoices (invoice_number, client_name, amount, total_amount, amount_paid, balance, due_date, status, source, zoho_invoice_id)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'zoho', ?)
         `).run(inv.invoice_number, inv.customer_name, inv.total, inv.total, invoiceAmountPaid, invoiceBalance, inv.due_date || null, inv.status, inv.zoho_id);
@@ -60,7 +60,7 @@ export async function POST() {
 
           if (!existingPayment) {
             // Record the payment
-            db.prepare(`
+            await db.prepare(`
               INSERT INTO client_payments (gig_id, invoice_id, amount, payment_date, payment_method, notes)
               VALUES (?, ?, ?, ?, 'bank_transfer', ?)
             `).run(
