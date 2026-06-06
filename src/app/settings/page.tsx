@@ -23,21 +23,41 @@ export default function SettingsPage() {
 
   const save = async () => {
     setSaving(true);
-    await fetch('/api/zoho/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    setSaved(true);
-    setSaving(false);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      const res = await fetch('/api/zoho/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Save failed: ${data.error || 'Unknown error'}`);
+        setSaving(false);
+        return;
+      }
+      setSaved(true);
+      setSaving(false);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      alert(`Save failed: ${e}`);
+      setSaving(false);
+    }
   };
 
   const test = async () => {
     setTesting(true);
     setTestResult(null);
-    const res = await fetch('/api/zoho/settings', { method: 'PUT' });
-    setTestResult(await res.json());
+    try {
+      const res = await fetch('/api/zoho/settings', { method: 'PUT' });
+      const data = await res.json();
+      if (!res.ok) {
+        setTestResult({ ok: false, message: data.error || 'Test failed' });
+      } else {
+        setTestResult(data);
+      }
+    } catch (e) {
+      setTestResult({ ok: false, message: String(e) });
+    }
     setTesting(false);
   };
 
