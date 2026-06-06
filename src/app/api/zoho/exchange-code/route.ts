@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForTokens, getZohoSettings } from '@/lib/zoho';
 import { requireOwner, validateRequired } from '@/lib/api-auth';
 
-const REDIRECT_URI = 'http://localhost:3000/token';
+const REDIRECT_URI = 'https://photo-dashboard-nu.vercel.app/token';
 
 export async function POST(req: NextRequest) {
   const authResult = await requireOwner();

@@ -50,7 +50,7 @@ export default function SettingsPage() {
     ca: 'https://accounts.zoho.ca',
   };
 
-  const authUrl = `${regionUrls[form.region] || regionUrls.com}/oauth/v2/auth?scope=ZohoInvoice.invoices.ALL,ZohoInvoice.contacts.ALL,ZohoInvoice.settings.READ&client_id=${form.client_id || 'YOUR_CLIENT_ID'}&response_type=code&access_type=offline&redirect_uri=http://localhost:3000/token&prompt=consent`;
+  const authUrl = `${regionUrls[form.region] || regionUrls.com}/oauth/v2/auth?scope=ZohoInvoice.invoices.ALL,ZohoInvoice.contacts.ALL,ZohoInvoice.settings.READ&client_id=${form.client_id || 'YOUR_CLIENT_ID'}&response_type=code&access_type=offline&redirect_uri=https://photo-dashboard-nu.vercel.app/token&prompt=consent`;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -123,8 +123,8 @@ export default function SettingsPage() {
             <ol className="list-decimal list-inside text-gray-400 space-y-1 mt-1">
               <li>Go to <a href="https://api-console.zoho.com/" target="_blank" className="text-white underline font-bold" rel="noopener noreferrer">api-console.zoho.com</a></li>
               <li>Click <strong className="text-white">Add Client</strong> → <strong className="text-white">Server-based Application</strong></li>
-              <li>Homepage URL: <code className="bg-gray-800 text-green-400 px-1.5 py-0.5 rounded">http://localhost:3000</code></li>
-              <li>Redirect URI: <code className="bg-gray-800 text-green-400 px-1.5 py-0.5 rounded">http://localhost:3000/token</code></li>
+              <li>Homepage URL: <code className="bg-gray-800 text-green-400 px-1.5 py-0.5 rounded">https://photo-dashboard-nu.vercel.app</code></li>
+              <li>Redirect URI: <code className="bg-gray-800 text-green-400 px-1.5 py-0.5 rounded">https://photo-dashboard-nu.vercel.app/token</code></li>
               <li>Click Create, copy your <strong className="text-white">Client ID</strong> and <strong className="text-white">Client Secret</strong></li>
             </ol>
           </div>
