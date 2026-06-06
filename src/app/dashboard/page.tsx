@@ -1,69 +1,21 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
-import getDb from '@/lib/db';
 import { formatCurrency } from '@/lib/utils';
+import { StatCard, MiniStat } from '@/components/dashboard';
+import { getDashboardStats, getRecentGigs, getMonthlyRevenue, getMonthlyExpenses, getTopWorkerEarnings } from '@/lib/queries';
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session) redirect('/login');
 
-  const db = getDb();
+  const stats = getDashboardStats();
+  const recentGigs = getRecentGigs(5);
+  const monthlyRevenue = getMonthlyRevenue(6);
+  const monthlyExpenses = getMonthlyExpenses(6);
+  const workerEarnings = getTopWorkerEarnings(5);
 
-  // Get stats
-  const totalGigs = db.prepare('SELECT COUNT(*) as count FROM gigs').get() as any;
-  const completedGigs = db.prepare("SELECT COUNT(*) as count FROM gigs WHERE status = 'completed'").get() as any;
-  const pendingGigs = db.prepare("SELECT COUNT(*) as count FROM gigs WHERE status = 'pending'").get() as any;
-
-  const totalRevenue = db.prepare("SELECT COALESCE(SUM(total_amount), 0) as total FROM gigs WHERE status != 'cancelled'").get() as any;
-  const totalExpenses = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses').get() as any;
-  const totalClientPayments = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM client_payments').get() as any;
-  const totalWorkerPayments = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM worker_payments').get() as any;
-
-  const outstandingBalance = (totalRevenue.total || 0) - (totalClientPayments.total || 0);
-  const netProfit = (totalClientPayments.total || 0) - (totalExpenses.total || 0) - (totalWorkerPayments.total || 0);
-
-  // Recent gigs
-  const recentGigs = db.prepare(`
-    SELECT g.*, 
-      GROUP_CONCAT(DISTINCT gw.worker_id) as worker_ids
-    FROM gigs g
-    LEFT JOIN gig_workers gw ON g.id = gw.gig_id
-    GROUP BY g.id
-    ORDER BY g.gig_date DESC
-    LIMIT 5
-  `).all() as any[];
-
-  // Monthly revenue (last 6 months)
-  const monthlyRevenue = db.prepare(`
-    SELECT 
-      strftime('%Y-%m', gig_date) as month,
-      SUM(total_amount) as revenue
-    FROM gigs
-    WHERE gig_date >= date('now', '-6 months') AND status != 'cancelled'
-    GROUP BY month
-    ORDER BY month
-  `).all() as any[];
-
-  // Monthly expenses (last 6 months)
-  const monthlyExpenses = db.prepare(`
-    SELECT 
-      strftime('%Y-%m', expense_date) as month,
-      SUM(amount) as expenses
-    FROM expenses
-    WHERE expense_date >= date('now', '-6 months')
-    GROUP BY month
-    ORDER BY month
-  `).all() as any[];
-
-  // Worker earnings summary
-  const workerEarnings = db.prepare(`
-    SELECT w.name, COALESCE(SUM(wp.amount), 0) as total_earned
-    FROM workers w
-    LEFT JOIN worker_payments wp ON w.id = wp.worker_id AND wp.status = 'paid'
-    GROUP BY w.id
-    ORDER BY total_earned DESC
-    LIMIT 5
-  `).all() as any[];
+  const outstandingBalance = stats.outstandingBalance;
+  const netProfit = stats.netProfit;
 
 
 
@@ -78,7 +30,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Revenue"
-          value={formatCurrency(totalRevenue.total || 0)}
+          value={formatCurrency(stats.totalRevenue)}
           icon="💰"
           color="bg-green-50"
         />
@@ -90,7 +42,7 @@ export default async function DashboardPage() {
         />
         <StatCard
           title="Total Expenses"
-          value={formatCurrency(totalExpenses.total || 0)}
+          value={formatCurrency(stats.totalExpenses)}
           icon="📋"
           color="bg-red-50"
         />
@@ -104,10 +56,10 @@ export default async function DashboardPage() {
 
       {/* Secondary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MiniStat title="Total Gigs" value={totalGigs.count || 0} />
-        <MiniStat title="Completed" value={completedGigs.count || 0} />
-        <MiniStat title="Pending" value={pendingGigs.count || 0} />
-        <MiniStat title="Worker Payments" value={formatCurrency(totalWorkerPayments.total || 0)} />
+        <MiniStat title="Total Gigs" value={stats.totalGigs} />
+        <MiniStat title="Completed" value={stats.completedGigs} />
+        <MiniStat title="Pending" value={stats.pendingGigs} />
+        <MiniStat title="Worker Payments" value={formatCurrency(stats.totalWorkerPayments)} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -115,8 +67,8 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Revenue vs Expenses (6 months)</h2>
           <div className="space-y-3">
-            {monthlyRevenue.map((item: any) => {
-              const expense = monthlyExpenses.find((e: any) => e.month === item.month)?.expenses || 0;
+            {monthlyRevenue.map((item) => {
+              const expense = monthlyExpenses.find((e) => e.month === item.month)?.expenses || 0;
               const maxVal = Math.max(item.revenue, expense, 1);
               return (
                 <div key={item.month} className="space-y-1">
@@ -152,7 +104,7 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Gigs</h2>
           <div className="space-y-3">
-            {recentGigs.map((gig: any) => (
+            {recentGigs.map((gig) => (
               <div key={gig.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900">{gig.title}</p>
@@ -181,7 +133,7 @@ export default async function DashboardPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Workers by Earnings</h2>
         <div className="space-y-3">
-          {workerEarnings.map((worker: any, i: number) => (
+          {workerEarnings.map((worker, i: number) => (
             <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
@@ -197,29 +149,6 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value, icon, color }: { title: string; value: string; icon: string; color: string }) {
-  return (
-    <div className={`${color} rounded-2xl p-5 border-2 border-gray-200`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-bold text-gray-700 uppercase">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-        </div>
-        <span className="text-2xl">{icon}</span>
-      </div>
-    </div>
-  );
-}
-
-function MiniStat({ title, value }: { title: string; value: number | string }) {
-  return (
-    <div className="bg-white rounded-2xl border-2 border-gray-200 p-4">
-      <p className="text-sm font-bold text-gray-600 uppercase">{title}</p>
-      <p className="text-xl font-bold text-gray-900 mt-1">{value}</p>
     </div>
   );
 }

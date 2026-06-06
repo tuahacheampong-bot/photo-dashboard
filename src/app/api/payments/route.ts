@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth } from '@/lib/api-auth';
+import type { ClientPayment, WorkerPayment } from '@/lib/types';
+
+interface ClientPaymentDetail extends ClientPayment {
+  gig_title: string;
+  client_name: string;
+}
+
+interface WorkerPaymentDetail extends WorkerPayment {
+  gig_title: string;
+  worker_name: string;
+}
 
 // GET /api/payments - List all payments
 export async function GET(request: NextRequest) {
@@ -13,8 +24,8 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || 'all'; // client, worker, all
     const status = searchParams.get('status');
 
-    let clientPayments: any[] = [];
-    let workerPayments: any[] = [];
+    let clientPayments: ClientPaymentDetail[] = [];
+    let workerPayments: WorkerPaymentDetail[] = [];
 
     if (type === 'client' || type === 'all') {
       let query = `
@@ -23,7 +34,7 @@ export async function GET(request: NextRequest) {
         JOIN gigs g ON cp.gig_id = g.id
       `;
       const conditions: string[] = [];
-      const params: any[] = [];
+      const params: (string | number | null)[] = [];
 
       if (status) {
         conditions.push('cp.status = ?');
@@ -35,7 +46,7 @@ export async function GET(request: NextRequest) {
       }
       query += ' ORDER BY cp.payment_date DESC';
 
-      clientPayments = db.prepare(query).all(...params);
+      clientPayments = db.prepare(query).all(...params) as ClientPaymentDetail[];
     }
 
     if (type === 'worker' || type === 'all') {
@@ -46,7 +57,7 @@ export async function GET(request: NextRequest) {
         JOIN workers w ON wp.worker_id = w.id
       `;
       const conditions: string[] = [];
-      const params: any[] = [];
+      const params: (string | number | null)[] = [];
 
       if (status) {
         conditions.push('wp.status = ?');
@@ -58,7 +69,7 @@ export async function GET(request: NextRequest) {
       }
       query += ' ORDER BY wp.payment_date DESC';
 
-      workerPayments = db.prepare(query).all(...params);
+      workerPayments = db.prepare(query).all(...params) as WorkerPaymentDetail[];
     }
 
     return NextResponse.json({ client_payments: clientPayments, worker_payments: workerPayments });

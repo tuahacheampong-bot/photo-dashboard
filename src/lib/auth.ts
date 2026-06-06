@@ -2,6 +2,23 @@ import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import getDb from '@/lib/db';
+import type { User, UserRole } from '@/lib/types';
+
+interface UserWithRole extends User {
+  role: UserRole;
+}
+
+interface TokenWithRole {
+  role?: UserRole;
+  id?: string;
+}
+
+interface SessionUser {
+  name?: string | null;
+  email?: string | null;
+  role?: UserRole;
+  id?: string;
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -17,7 +34,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const db = getDb();
         const user = db.prepare('SELECT * FROM users WHERE email = ?').get(
           credentials.email as string
-        ) as any;
+        ) as UserWithRole | null;
 
         if (!user) return null;
 
@@ -44,15 +61,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role;
-        token.id = user.id;
+        (token as TokenWithRole).role = (user as { role?: UserRole }).role;
+        (token as TokenWithRole).id = user.id;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role;
-        (session.user as any).id = token.id;
+        (session.user as SessionUser).role = (token as TokenWithRole).role;
+        (session.user as SessionUser).id = (token as TokenWithRole).id;
       }
       return session;
     },

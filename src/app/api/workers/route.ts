@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { requireAuth, requireOwner, validateRequired, validateEmail, validateLength, validateEnum, firstError } from '@/lib/api-auth';
+import type { Worker } from '@/lib/types';
+
+interface SumResult { total: number; }
+interface CountResult { count: number; }
+interface GigAssignment {
+  gig_id: number;
+  role: string;
+  custom_split: number | null;
+  total_amount: number;
+  photographer_split: number;
+  retoucher_split: number;
+  status: string;
+}
+
+interface WorkerEnriched extends Worker {
+  total_owed: number;
+  total_paid: number;
+  outstanding: number;
+  gig_count: number;
+}
 
 // GET /api/workers - List all workers
 export async function GET(request: NextRequest) {
@@ -21,7 +41,7 @@ export async function GET(request: NextRequest) {
     `;
 
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     if (search) {
       conditions.push('(w.name LIKE ? OR w.email LIKE ? OR w.phone LIKE ?)');
@@ -39,21 +59,21 @@ export async function GET(request: NextRequest) {
 
     query += ' ORDER BY w.name';
 
-    const workers = db.prepare(query).all(...params) as any[];
+    const workers = db.prepare(query).all(...params) as Worker[];
 
     // Compute outstanding for each worker
-    const enriched = workers.map((w: any) => {
+    const enriched = workers.map((w) => {
       // Get all gigs this worker is assigned to
       const gigAssignments = db.prepare(`
         SELECT gw.gig_id, gw.role, gw.custom_split, g.total_amount, g.photographer_split, g.retoucher_split, g.status
         FROM gig_workers gw
         JOIN gigs g ON gw.gig_id = g.id
         WHERE gw.worker_id = ? AND g.status != 'cancelled'
-      `).all(w.id) as any[];
+      `).all(w.id) as GigAssignment[];
 
       let totalOwed = 0;
       // Group by gig_id to count unique gigs and sum all roles per gig
-      const gigMap = new Map<number, any[]>();
+      const gigMap = new Map<number, GigAssignment[]>();
       for (const assignment of gigAssignments) {
         const existing = gigMap.get(assignment.gig_id);
         if (existing) {
@@ -73,7 +93,7 @@ export async function GET(request: NextRequest) {
 
           const roleCount = db.prepare(
             'SELECT COUNT(*) as count FROM gig_workers WHERE gig_id = ? AND role = ?'
-          ).get(assignment.gig_id, assignment.role) as any;
+          ).get(assignment.gig_id, assignment.role) as CountResult;
 
           totalOwed += (assignment.total_amount * split) / 100 / roleCount.count;
         }
@@ -82,7 +102,7 @@ export async function GET(request: NextRequest) {
       // Total paid to this worker
       const paidResult = db.prepare(
         "SELECT COALESCE(SUM(amount), 0) as total FROM worker_payments WHERE worker_id = ? AND status = 'paid'"
-      ).get(w.id) as any;
+      ).get(w.id) as SumResult;
 
       const totalPaid = paidResult.total || 0;
       const outstanding = Math.max(0, totalOwed - totalPaid);
@@ -94,7 +114,7 @@ export async function GET(request: NextRequest) {
         total_paid: totalPaid,
         outstanding,
         gig_count: gigCount,
-      };
+      } as WorkerEnriched;
     });
 
     return NextResponse.json(enriched);
@@ -111,7 +131,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as {
+      name: string;
+      email?: string | null;
+      phone?: string | null;
+      skills?: string;
+      rate_per_gig?: number;
+      create_account?: boolean;
+      password?: string;
+    };
     const { name, email, phone, skills, rate_per_gig, create_account, password } = body;
 
     const err = firstError(
@@ -144,9 +172,10 @@ export async function POST(request: NextRequest) {
     ).run(userId, name, email || null, phone || null, skills || 'photographer', rate_per_gig || 0);
 
     return NextResponse.json({ id: result.lastInsertRowid, message: 'Worker created successfully' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating worker:', error);
-    if (error.message?.includes('UNIQUE constraint')) {
+    const err = error as Error;
+    if (err.message?.includes('UNIQUE constraint')) {
       return NextResponse.json({ error: 'Worker with this email already exists' }, { status: 400 });
     }
     return NextResponse.json({ error: 'Failed to create worker' }, { status: 500 });

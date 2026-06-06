@@ -22,8 +22,9 @@ export async function POST(request: NextRequest) {
     ).run(name);
 
     return NextResponse.json({ id: result.lastInsertRowid, message: 'Category created successfully' });
-  } catch (error: any) {
-    if (error.message?.includes('UNIQUE constraint')) {
+  } catch (error) {
+    const err = error as Error;
+    if (err.message?.includes('UNIQUE constraint')) {
       return NextResponse.json({ error: 'Category already exists' }, { status: 400 });
     }
     console.error('Error creating category:', error);

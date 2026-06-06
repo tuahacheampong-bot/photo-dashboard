@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth, validateEnum } from '@/lib/api-auth';
+import type { Gig, Worker, WorkerRole } from '@/lib/types';
+
+interface RoleResult { role: WorkerRole; }
 
 // POST /api/gigs/[id]/assign - Worker assigns themselves to a gig
 export async function POST(
@@ -18,7 +21,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid gig ID' }, { status: 400 });
     }
 
-    const body = await request.json();
+    const body = await request.json() as { worker_id: number; role: WorkerRole };
     const { worker_id, role } = body;
 
     if (!worker_id || !role) {
@@ -31,13 +34,13 @@ export async function POST(
     }
 
     // Check gig exists and is not cancelled
-    const gig = db.prepare("SELECT * FROM gigs WHERE id = ? AND status != 'cancelled'").get(id) as any;
+    const gig = db.prepare("SELECT * FROM gigs WHERE id = ? AND status != 'cancelled'").get(id) as Gig | null;
     if (!gig) {
       return NextResponse.json({ error: 'Gig not found or cancelled' }, { status: 404 });
     }
 
     // Check worker exists
-    const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(worker_id) as any;
+    const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(worker_id) as Worker | null;
     if (!worker) {
       return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
     }
@@ -45,7 +48,7 @@ export async function POST(
     // Check if already assigned to this specific role
     const existing = db.prepare(
       'SELECT id FROM gig_workers WHERE gig_id = ? AND worker_id = ? AND role = ?'
-    ).get(id, worker_id, role) as any;
+    ).get(id, worker_id, role);
 
     if (existing) {
       return NextResponse.json({ error: 'Already assigned to this role on this gig' }, { status: 400 });
@@ -59,9 +62,9 @@ export async function POST(
     // Check what roles they now have
     const allRoles = db.prepare(
       'SELECT role FROM gig_workers WHERE gig_id = ? AND worker_id = ?'
-    ).all(id, worker_id) as any[];
+    ).all(id, worker_id) as RoleResult[];
 
-    const roleNames = allRoles.map((r: any) => r.role).join(' + ');
+    const roleNames = allRoles.map((r) => r.role).join(' + ');
 
     return NextResponse.json({ message: `Assigned as ${role}. Worker now has: ${roleNames}` });
   } catch (error) {
@@ -96,7 +99,7 @@ export async function DELETE(
     // Check if there are payments for this worker on this gig
     const payments = db.prepare(
       'SELECT id FROM worker_payments WHERE gig_id = ? AND worker_id = ? LIMIT 1'
-    ).get(id, workerId) as any;
+    ).get(id, workerId);
 
     if (payments) {
       return NextResponse.json(

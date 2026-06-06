@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { getZohoSettings, fetchAllInvoices } from '@/lib/zoho';
 import getDb from '@/lib/db';
 import { requireOwner } from '@/lib/api-auth';
+import type { ZohoInvoice } from '@/lib/types';
+
+interface InvoiceWithGig {
+  id: number;
+  gig_id: number | null;
+}
 
 export async function POST() {
   const authResult = await requireOwner();
@@ -13,7 +19,7 @@ export async function POST() {
   }
 
   try {
-    const zohoInvoices = await fetchAllInvoices(settings);
+    const zohoInvoices = await fetchAllInvoices(settings) as ZohoInvoice[];
     const db = getDb();
     let created = 0;
     let updated = 0;
@@ -24,7 +30,7 @@ export async function POST() {
       // For paid invoices, balance should always be 0
       const invoiceBalance = inv.status === 'paid' ? 0 : inv.balance;
       const invoiceAmountPaid = inv.status === 'paid' ? inv.total : amountPaid;
-      const existing = db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as any;
+      const existing = db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as InvoiceWithGig | null;
 
       if (existing) {
         db.prepare(`
@@ -45,12 +51,12 @@ export async function POST() {
 
       // Auto-record client payment if invoice has been paid or partially paid
       if (invoiceAmountPaid > 0) {
-        const invoice = db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as any;
+        const invoice = db.prepare('SELECT id, gig_id FROM invoices WHERE zoho_invoice_id = ?').get(inv.zoho_id) as InvoiceWithGig | null;
         if (invoice && invoice.gig_id) {
           // Check if payment already recorded for this invoice
           const existingPayment = db.prepare(
             'SELECT id FROM client_payments WHERE invoice_id = ?'
-          ).get(invoice.id) as any;
+          ).get(invoice.id);
 
           if (!existingPayment) {
             // Record the payment
@@ -77,7 +83,8 @@ export async function POST() {
       total: zohoInvoices.length,
       paymentsRecorded,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e) {
+    const err = e as Error;
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

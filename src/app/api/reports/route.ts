@@ -2,6 +2,45 @@ import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth, validateEnum } from '@/lib/api-auth';
 
+interface SumResult { total: number; }
+interface CountResult { count: number; }
+interface GigReport {
+  id: number;
+  title: string;
+  client_name: string;
+  gig_date: string;
+  total_amount: number;
+  status: string;
+  total_paid: number;
+  outstanding: number;
+  worker_cost: number;
+}
+interface WorkerReport {
+  id: number;
+  name: string;
+  skills: string;
+  gig_count: number;
+  total_earned: number;
+  pending_amount: number;
+}
+interface MonthlyReport {
+  month: string;
+  revenue: number;
+  gig_count: number;
+}
+interface MonthlyExpenseReport {
+  month: string;
+  expenses: number;
+}
+interface MonthlyWorkerPaymentReport {
+  month: string;
+  worker_payments: number;
+}
+interface ExpenseCategoryReport {
+  name: string;
+  total: number;
+}
+
 // GET /api/reports - Generate reports
 export async function GET(request: NextRequest) {
   const authResult = await requireAuth();
@@ -23,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Default date range
     let dateFilter = '';
-    let params: any[] = [];
+    let params: (string | number | null)[] = [];
 
     if (dateFrom && dateTo) {
       dateFilter = `AND gig_date BETWEEN ? AND ?`;
@@ -40,26 +79,26 @@ export async function GET(request: NextRequest) {
       const revenue = db.prepare(`
         SELECT COALESCE(SUM(total_amount), 0) as total
         FROM gigs WHERE status != 'cancelled' ${dateFilter}
-      `).get(...params) as any;
+      `).get(...params) as SumResult;
 
       const expenses = db.prepare(`
         SELECT COALESCE(SUM(amount), 0) as total
         FROM expenses WHERE 1=1 ${dateFilter.replace('gig_date', 'expense_date')}
-      `).get(...params) as any;
+      `).get(...params) as SumResult;
 
       const clientPayments = db.prepare(`
         SELECT COALESCE(SUM(amount), 0) as total
         FROM client_payments WHERE 1=1 ${dateFilter.replace('gig_date', 'payment_date')}
-      `).get(...params) as any;
+      `).get(...params) as SumResult;
 
       const workerPayments = db.prepare(`
         SELECT COALESCE(SUM(amount), 0) as total
         FROM worker_payments WHERE 1=1 ${dateFilter.replace('gig_date', 'payment_date')}
-      `).get(...params) as any;
+      `).get(...params) as SumResult;
 
       const gigCount = db.prepare(`
         SELECT COUNT(*) as count FROM gigs WHERE status != 'cancelled' ${dateFilter}
-      `).get(...params) as any;
+      `).get(...params) as CountResult;
 
       return NextResponse.json({
         revenue: revenue.total,
@@ -83,7 +122,7 @@ export async function GET(request: NextRequest) {
         WHERE g.status != 'cancelled' ${dateFilter}
         GROUP BY g.id
         ORDER BY g.gig_date DESC
-      `).all(...params);
+      `).all(...params) as GigReport[];
 
       return NextResponse.json(gigs);
     }
@@ -99,7 +138,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN worker_payments wp ON w.id = wp.worker_id
         GROUP BY w.id
         ORDER BY total_earned DESC
-      `).all();
+      `).all() as WorkerReport[];
 
       return NextResponse.json(workers);
     }
@@ -115,7 +154,7 @@ export async function GET(request: NextRequest) {
         GROUP BY month
         ORDER BY month DESC
         LIMIT 12
-      `).all();
+      `).all() as MonthlyReport[];
 
       const monthlyExpenses = db.prepare(`
         SELECT
@@ -125,7 +164,7 @@ export async function GET(request: NextRequest) {
         GROUP BY month
         ORDER BY month DESC
         LIMIT 12
-      `).all();
+      `).all() as MonthlyExpenseReport[];
 
       const monthlyWorkerPayments = db.prepare(`
         SELECT
@@ -136,7 +175,7 @@ export async function GET(request: NextRequest) {
         GROUP BY month
         ORDER BY month DESC
         LIMIT 12
-      `).all();
+      `).all() as MonthlyWorkerPaymentReport[];
 
       return NextResponse.json({ months, monthlyExpenses, monthlyWorkerPayments });
     }
@@ -149,7 +188,7 @@ export async function GET(request: NextRequest) {
         GROUP BY ec.id
         HAVING total > 0
         ORDER BY total DESC
-      `).all();
+      `).all() as ExpenseCategoryReport[];
 
       return NextResponse.json(categories);
     }

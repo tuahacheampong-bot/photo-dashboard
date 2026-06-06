@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 
@@ -35,10 +35,7 @@ export default function OpenGigsPage() {
   const [selectedWorkers, setSelectedWorkers] = useState<Record<number, number[]>>({});
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  useEffect(() => {
-    fetchGigs();
-    fetch('/api/workers').then(r => r.json()).then(d => setWorkers(Array.isArray(d) ? d : []));
-  }, [search]);
+  const loadedRef = useRef(false);
 
   const fetchGigs = async () => {
     setLoading(true);
@@ -49,6 +46,14 @@ export default function OpenGigsPage() {
     setGigs(Array.isArray(data) ? data : []);
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchGigs();
+      fetch('/api/workers').then(r => r.json()).then(d => setWorkers(Array.isArray(d) ? d : []));
+    }
+  }, [search, fetchGigs]);
 
   const toggleWorker = (gigId: number, workerId: number) => {
     const current = selectedWorkers[gigId] || [];

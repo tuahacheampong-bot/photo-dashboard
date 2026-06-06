@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 
+// Generate placeholder once at module load time
+const INVOICE_NUMBER_PLACEHOLDER = `INV-${Date.now().toString().slice(-6)}`;
+
 interface Worker {
   id: number;
   name: string;
@@ -194,8 +197,8 @@ export default function NewGigPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
-                <input name="invoice_number" value={form.invoice_number} onChange={handleChange}
-                  placeholder={`INV-${Date.now().toString().slice(-6)}`}
+              <input name="invoice_number" value={form.invoice_number} onChange={handleChange}
+                placeholder={INVOICE_NUMBER_PLACEHOLDER}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none" />
               </div>
               <div>

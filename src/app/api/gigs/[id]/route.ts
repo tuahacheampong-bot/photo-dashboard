@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth, requireOwner, validateRequired, validatePositiveNumber, validateEmail, validateDate, validateLength, validateEnum, firstError } from '@/lib/api-auth';
+import type { Gig, GigWorkerInput, WorkerPayment, ClientPayment, WorkerRole } from '@/lib/types';
+
+interface GigWithDetails extends Gig {
+  total_paid: number;
+  outstanding: number;
+  worker_paid: number;
+  net_profit: number;
+}
+
+interface GigWorkerDetail {
+  id: number;
+  gig_id: number;
+  worker_id: number;
+  role: WorkerRole;
+  custom_split: number | null;
+  created_at: string;
+  worker_name: string;
+  skills: string;
+  phone: string | null;
+  email: string | null;
+}
+
+interface WorkerPaymentDetail extends WorkerPayment {
+  worker_name: string;
+}
+
+type ClientPaymentDetail = ClientPayment;
 
 // GET /api/gigs/[id] - Get a single gig
 export async function GET(
@@ -26,7 +53,7 @@ export async function GET(
         COALESCE((SELECT SUM(amount) FROM client_payments WHERE gig_id = g.id), 0) - COALESCE((SELECT SUM(amount) FROM worker_payments WHERE gig_id = g.id AND status = 'paid'), 0) as net_profit
       FROM gigs g
       WHERE g.id = ?
-    `).get(id) as any;
+    `).get(id) as GigWithDetails | null;
 
     if (!gig) {
       return NextResponse.json({ error: 'Gig not found' }, { status: 404 });
@@ -38,12 +65,12 @@ export async function GET(
       FROM gig_workers gw
       JOIN workers w ON gw.worker_id = w.id
       WHERE gw.gig_id = ?
-    `).all(id);
+    `).all(id) as GigWorkerDetail[];
 
     // Get client payments for this gig
     const payments = db.prepare(`
       SELECT * FROM client_payments WHERE gig_id = ? ORDER BY payment_date DESC
-    `).all(id);
+    `).all(id) as ClientPaymentDetail[];
 
     // Get worker payments for this gig
     const workerPayments = db.prepare(`
@@ -52,15 +79,15 @@ export async function GET(
       JOIN workers w ON wp.worker_id = w.id
       WHERE wp.gig_id = ?
       ORDER BY wp.payment_date DESC
-    `).all(id);
+    `).all(id) as WorkerPaymentDetail[];
 
     // Calculate payment breakdown
     const photographerSplit = gig.photographer_split || 30;
     const retoucherSplit = gig.retoucher_split || 30;
     const businessSplit = 100 - photographerSplit - retoucherSplit;
 
-    const photographers = workers.filter((w: any) => w.role === 'photographer');
-    const retouchers = workers.filter((w: any) => w.role === 'retoucher');
+    const photographers = workers.filter((w) => w.role === 'photographer');
+    const retouchers = workers.filter((w) => w.role === 'retoucher');
 
     const photographerTotal = (gig.total_amount * photographerSplit) / 100;
     const retoucherTotal = (gig.total_amount * retoucherSplit) / 100;
@@ -83,11 +110,11 @@ export async function GET(
         business_total: businessTotal,
         per_photographer: perPhotographer,
         per_retoucher: perRetoucher,
-        photographers: photographers.map((p: any) => ({
+        photographers: photographers.map((p) => ({
           ...p,
           amount: perPhotographer,
         })),
-        retouchers: retouchers.map((r: any) => ({
+        retouchers: retouchers.map((r) => ({
           ...r,
           amount: perRetoucher,
         })),
@@ -115,7 +142,21 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid gig ID' }, { status: 400 });
     }
 
-    const body = await request.json();
+    const body = await request.json() as {
+      title: string;
+      client_name: string;
+      client_email?: string | null;
+      client_phone?: string | null;
+      gig_date: string;
+      location?: string | null;
+      description?: string | null;
+      total_amount: number;
+      photographer_split?: number;
+      retoucher_split?: number;
+      invoice_reference?: string | null;
+      status?: string;
+      workers?: GigWorkerInput[];
+    };
     const {
       title, client_name, client_email, client_phone,
       gig_date, location, description, total_amount,
@@ -159,7 +200,7 @@ export async function PUT(
           'INSERT INTO gig_workers (gig_id, worker_id, role, custom_split) VALUES (?, ?, ?, ?)'
         );
         for (const worker of workers) {
-          insertWorker.run(id, worker.worker_id, worker.role, worker.custom_split || null);
+          insertWorker.run(id, worker.worker_id, worker.role, worker.custom_split ?? null);
         }
       }
     }

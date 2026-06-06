@@ -1,22 +1,111 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 
+interface PhotographerBreakdown {
+  worker_id: number;
+  worker_name: string;
+  amount: number;
+}
+
+interface RetoucherBreakdown {
+  worker_id: number;
+  worker_name: string;
+  amount: number;
+}
+
+interface Breakdown {
+  photographer_split: number;
+  retoucher_split: number;
+  business_split: number;
+  photographer_total: number;
+  retoucher_total: number;
+  business_total: number;
+  per_photographer: number;
+  per_retoucher: number;
+  photographers: PhotographerBreakdown[];
+  retouchers: RetoucherBreakdown[];
+}
+
+interface GigWorker {
+  worker_id: number;
+  worker_name: string;
+  role: string;
+  skills: string;
+  phone: string;
+  email: string;
+}
+
+interface ClientPayment {
+  id: number;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string | null;
+}
+
+interface WorkerPayment {
+  id: number;
+  worker_name: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  status: string;
+}
+
+interface Gig {
+  id: number;
+  title: string;
+  client_name: string;
+  gig_date: string;
+  total_amount: number;
+  total_paid: number;
+  outstanding: number;
+  worker_paid: number;
+  net_profit: number;
+  photographer_split: number;
+  retoucher_split: number;
+  breakdown: Breakdown;
+  workers: GigWorker[];
+  payments: ClientPayment[];
+  worker_payments: WorkerPayment[];
+}
+
+interface Worker {
+  worker_id: number;
+  worker_name: string;
+  skills: string;
+  phone: string;
+  email: string;
+}
+
+interface PaymentFormData {
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string;
+  notes: string;
+}
+
+interface WorkerPaymentFormData {
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string;
+  notes: string;
+}
+
 export default function GigDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [gig, setGig] = useState<any>(null);
+  const [gig, setGig] = useState<Gig | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showWorkerPaymentModal, setShowWorkerPaymentModal] = useState(false);
-  const [selectedWorker, setSelectedWorker] = useState<any>(null);
-
-  useEffect(() => {
-    fetchGig();
-  }, [params.id]);
+  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
 
   const fetchGig = async () => {
     const res = await fetch(`/api/gigs/${params.id}`);
@@ -26,11 +115,20 @@ export default function GigDetailPage() {
     setLoading(false);
   };
 
-  const handleRecordPayment = async (data: any) => {
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchGig();
+    }
+  }, [params.id, fetchGig]);
+
+  const handleRecordPayment = async (data: PaymentFormData) => {
     const res = await fetch('/api/payments/client', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gig_id: gig.id, ...data }),
+      body: JSON.stringify({ gig_id: gig!.id, ...data }),
     });
     if (res.ok) {
       setShowPaymentModal(false);
@@ -41,11 +139,11 @@ export default function GigDetailPage() {
     }
   };
 
-  const handleRecordWorkerPayment = async (data: any) => {
+  const handleRecordWorkerPayment = async (data: WorkerPaymentFormData) => {
     const res = await fetch('/api/payments/worker', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gig_id: gig.id, worker_id: selectedWorker.worker_id, ...data }),
+      body: JSON.stringify({ gig_id: gig!.id, worker_id: selectedWorker!.worker_id, ...data }),
     });
     if (res.ok) {
       setShowWorkerPaymentModal(false);
@@ -120,7 +218,7 @@ export default function GigDetailPage() {
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-500">Photographers ({gig.breakdown.photographer_split}%)</p>
             <p className="text-lg font-bold text-gray-900">{formatCurrency(gig.breakdown.photographer_total)}</p>
-            {gig.breakdown.photographers.map((p: any) => (
+            {gig.breakdown.photographers.map((p: PhotographerBreakdown) => (
               <p key={p.worker_id} className="text-sm text-gray-600 mt-1">
                 {p.worker_name}: {formatCurrency(p.amount)}
               </p>
@@ -129,7 +227,7 @@ export default function GigDetailPage() {
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-500">Retouchers ({gig.breakdown.retoucher_split}%)</p>
             <p className="text-lg font-bold text-gray-900">{formatCurrency(gig.breakdown.retoucher_total)}</p>
-            {gig.breakdown.retouchers.map((r: any) => (
+            {gig.breakdown.retouchers.map((r: RetoucherBreakdown) => (
               <p key={r.worker_id} className="text-sm text-gray-600 mt-1">
                 {r.worker_name}: {formatCurrency(r.amount)}
               </p>
@@ -149,7 +247,7 @@ export default function GigDetailPage() {
           <p className="text-gray-400 text-sm">No workers assigned</p>
         ) : (() => {
           // Group workers by worker_id to combine roles
-          const workerMap = new Map<number, { name: string; roles: string[]; worker: any }>();
+          const workerMap = new Map<number, { name: string; roles: string[]; worker: GigWorker }>();
           for (const w of gig.workers) {
             const existing = workerMap.get(w.worker_id);
             if (existing) {
@@ -186,7 +284,7 @@ export default function GigDetailPage() {
           <p className="text-gray-400 text-sm">No payments recorded yet</p>
         ) : (
           <div className="space-y-2">
-            {gig.payments.map((p: any) => (
+            {gig.payments.map((p: ClientPayment) => (
               <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900">{formatCurrency(p.amount)}</p>
@@ -206,7 +304,7 @@ export default function GigDetailPage() {
           <p className="text-gray-400 text-sm">No worker payments recorded yet</p>
         ) : (
           <div className="space-y-2">
-            {gig.worker_payments.map((p: any) => (
+            {gig.worker_payments.map((p: WorkerPayment) => (
               <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900">{p.worker_name}: {formatCurrency(p.amount)}</p>
@@ -236,9 +334,9 @@ export default function GigDetailPage() {
   );
 }
 
-function PaymentModal({ onClose, onSubmit, gigTotal, paidSoFar }: any) {
-  const [form, setForm] = useState({
-    amount: '',
+function PaymentModal({ onClose, onSubmit, gigTotal, paidSoFar }: { onClose: () => void; onSubmit: (data: PaymentFormData) => void; gigTotal: number; paidSoFar: number }) {
+  const [form, setForm] = useState<PaymentFormData>({
+    amount: 0,
     payment_date: new Date().toISOString().split('T')[0],
     payment_method: 'cash',
     reference_number: '',
@@ -248,7 +346,11 @@ function PaymentModal({ onClose, onSubmit, gigTotal, paidSoFar }: any) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...form, amount: parseFloat(form.amount) });
+    onSubmit({ ...form });
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, amount: parseFloat(e.target.value) || 0 });
   };
 
   return (
@@ -259,7 +361,7 @@ function PaymentModal({ onClose, onSubmit, gigTotal, paidSoFar }: any) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-            <input type="number" min="0" max={remaining} value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required
+            <input type="number" min="0" max={remaining} value={form.amount} onChange={handleAmountChange} required
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" />
           </div>
           <div>
@@ -293,9 +395,9 @@ function PaymentModal({ onClose, onSubmit, gigTotal, paidSoFar }: any) {
   );
 }
 
-function WorkerPaymentModal({ onClose, onSubmit, worker, gig }: any) {
-  const [form, setForm] = useState({
-    amount: '',
+function WorkerPaymentModal({ onClose, onSubmit, worker, gig }: { onClose: () => void; onSubmit: (data: WorkerPaymentFormData) => void; worker: Worker; gig: Gig }) {
+  const [form, setForm] = useState<WorkerPaymentFormData>({
+    amount: 0,
     payment_date: new Date().toISOString().split('T')[0],
     payment_method: 'cash',
     reference_number: '',
@@ -306,18 +408,22 @@ function WorkerPaymentModal({ onClose, onSubmit, worker, gig }: any) {
   let expectedAmount = 0;
   if (gig) {
     const roles = gig.workers
-      .filter((w: any) => w.worker_id === worker.worker_id)
-      .map((w: any) => w.role);
+      .filter((w) => w.worker_id === worker.worker_id)
+      .map((w) => w.role);
     for (const role of roles) {
       const split = role === 'photographer' ? gig.photographer_split : gig.retoucher_split;
-      const roleCount = gig.workers.filter((w: any) => w.role === role).length;
+      const roleCount = gig.workers.filter((w) => w.role === role).length;
       expectedAmount += (gig.total_amount * split / 100) / roleCount;
     }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...form, amount: parseFloat(form.amount) });
+    onSubmit({ ...form });
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, amount: parseFloat(e.target.value) || 0 });
   };
 
   return (
@@ -332,7 +438,7 @@ function WorkerPaymentModal({ onClose, onSubmit, worker, gig }: any) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-            <input type="number" min="0" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required
+            <input type="number" min="0" step="0.01" value={form.amount} onChange={handleAmountChange} required
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" />
           </div>
           <div>

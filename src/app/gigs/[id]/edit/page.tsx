@@ -4,10 +4,21 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+interface Worker {
+  id: number;
+  name: string;
+  skills: string;
+}
+
+interface GigWorker {
+  worker_id: number;
+  role: string;
+}
+
 export default function EditGigPage() {
   const params = useParams();
   const router = useRouter();
-  const [workers, setWorkers] = useState<any[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -30,7 +41,7 @@ export default function EditGigPage() {
         photographer_split: gig.photographer_split.toString(), retoucher_split: gig.retoucher_split.toString(),
         invoice_reference: gig.invoice_reference || '', status: gig.status,
       });
-      setAssignedWorkers(gig.workers.map((w: any) => ({ worker_id: w.worker_id, role: w.role })));
+      setAssignedWorkers(gig.workers.map((w: GigWorker) => ({ worker_id: w.worker_id, role: w.role })));
       setWorkers(workersData);
       setLoading(false);
     });

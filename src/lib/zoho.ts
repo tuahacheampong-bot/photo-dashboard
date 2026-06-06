@@ -26,7 +26,14 @@ export interface ZohoSettings {
 export function getZohoSettings(): ZohoSettings | null {
   try {
     const db = getDb();
-    const row = db.prepare('SELECT * FROM zoho_settings WHERE id = 1').get() as any;
+    interface ZohoSettingsRow {
+      client_id: string;
+      client_secret: string;
+      refresh_token: string;
+      organization_id: string;
+      region: string;
+    }
+    const row = db.prepare('SELECT * FROM zoho_settings WHERE id = 1').get() as ZohoSettingsRow | null;
     if (!row || !row.client_id) return null;
     return {
       client_id: row.client_id || '',
@@ -150,7 +157,7 @@ async function apiRequest(
   settings: ZohoSettings,
   method: string,
   path: string
-): Promise<any> {
+): Promise<unknown> {
   const r = ZOHO_REGIONS[settings.region] || ZOHO_REGIONS.com;
   const token = await getAccessToken(settings);
 
@@ -190,12 +197,27 @@ async function apiRequest(
 }
 
 export async function fetchAllInvoices(settings: ZohoSettings): Promise<ZohoInvoice[]> {
+  interface ZohoInvoicesResponse {
+    invoices: Array<{
+      invoice_id: string;
+      invoice_number: string;
+      date: string;
+      due_date: string;
+      customer_name: string;
+      contact?: { contact_name: string };
+      total: string;
+      balance: string;
+      status: string;
+    }>;
+    page_context: { page: number; total_pages: number } | null;
+  }
+
   const allInvoices: ZohoInvoice[] = [];
   let page = 1;
   let hasMore = true;
 
   while (hasMore) {
-    const data = await apiRequest(settings, 'GET', `/invoices?page=${page}&per_page=200`);
+    const data = await apiRequest(settings, 'GET', `/invoices?page=${page}&per_page=200`) as ZohoInvoicesResponse;
     const invoices = data.invoices || [];
 
     for (const inv of invoices) {
@@ -212,20 +234,25 @@ export async function fetchAllInvoices(settings: ZohoSettings): Promise<ZohoInvo
     }
 
     const ctx = data.page_context;
-    hasMore = ctx && ctx.page < ctx.total_pages;
+    hasMore = !!ctx && ctx.page < ctx.total_pages;
     page++;
   }
 
   return allInvoices;
 }
 
+interface ZohoOrganizationsResponse {
+  organizations: Array<{ organization_name: string }> | null;
+}
+
 export async function testConnection(settings: ZohoSettings): Promise<{ ok: boolean; message: string }> {
   try {
-    const data = await apiRequest(settings, 'GET', '/organizations');
+    const data = await apiRequest(settings, 'GET', '/organizations') as ZohoOrganizationsResponse;
     const name = data.organizations?.[0]?.organization_name || 'Connected';
     return { ok: true, message: `Connected to ${name}` };
-  } catch (e: any) {
-    return { ok: false, message: e.message };
+  } catch (e) {
+    const err = e as Error;
+    return { ok: false, message: err.message };
   }
 }
 
@@ -318,8 +345,9 @@ export async function createZohoInvoice(
       invoice_id: zohoInvoiceData.invoice?.invoice_id || '',
       invoice_number: zohoInvoiceData.invoice?.invoice_number || invoice.invoice_number,
     };
-  } catch (e: any) {
-    console.error('Failed to create Zoho invoice:', e.message);
+  } catch (e) {
+    const err = e as Error;
+    console.error('Failed to create Zoho invoice:', err.message);
     return null;
   }
 }

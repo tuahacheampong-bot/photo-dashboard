@@ -1,10 +1,45 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { formatCurrency } from '@/lib/utils';
 
+interface Expense {
+  id: number;
+  category_id: number | null;
+  description: string;
+  amount: number;
+  expense_date: string;
+  gig_id: number | null;
+  receipt_reference: string | null;
+  notes: string | null;
+  created_at: string;
+  category_name: string | null;
+  gig_title: string | null;
+}
+
+interface ExpenseCategory {
+  id: number;
+  name: string;
+  is_default: number;
+  created_at: string;
+}
+
+interface ExpensesData {
+  expenses: Expense[];
+  categories: ExpenseCategory[];
+  total: number;
+}
+
+interface ExpenseFormData {
+  category_id: number | null;
+  description: string;
+  amount: number;
+  expense_date: string;
+  notes: string;
+}
+
 export default function ExpensesPage() {
-  const [data, setData] = useState<any>({ expenses: [], categories: [], total: 0 });
+  const [data, setData] = useState<ExpensesData>({ expenses: [], categories: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
@@ -12,9 +47,9 @@ export default function ExpensesPage() {
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
-  useEffect(() => { fetchExpenses(); }, [categoryFilter, dateFrom, dateTo]);
+  const loadedRef = useRef(false);
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
     if (categoryFilter !== 'all') params.set('category', categoryFilter);
@@ -23,9 +58,17 @@ export default function ExpensesPage() {
     const res = await fetch(`/api/expenses?${params}`);
     setData(await res.json());
     setLoading(false);
-  };
+  }, [categoryFilter, dateFrom, dateTo]);
 
-  const handleCreate = async (formData: any) => {
+  // Initial load
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchExpenses();
+    }
+  }, [fetchExpenses]);
+
+  const handleCreate = async (formData: ExpenseFormData) => {
     const res = await fetch('/api/expenses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -75,7 +118,7 @@ export default function ExpensesPage() {
         <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
           className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 outline-none">
           <option value="all">All Categories</option>
-          {data.categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {data.categories.map((c: ExpenseCategory) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
           className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 outline-none" placeholder="From" />
@@ -91,7 +134,7 @@ export default function ExpensesPage() {
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-200">
-            {data.expenses.map((e: any) => (
+            {data.expenses.map((e: Expense) => (
               <div key={e.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                 <div>
                   <p className="font-medium text-gray-900">{e.description}</p>
@@ -110,7 +153,7 @@ export default function ExpensesPage() {
   );
 }
 
-function ExpenseModal({ categories, onClose, onSubmit }: any) {
+function ExpenseModal({ categories, onClose, onSubmit }: { categories: ExpenseCategory[]; onClose: () => void; onSubmit: (data: ExpenseFormData) => void }) {
   const [form, setForm] = useState({ category_id: '', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0], notes: '' });
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSubmit({ ...form, category_id: form.category_id ? parseInt(form.category_id) : null, amount: parseFloat(form.amount) }); };
 
@@ -134,7 +177,7 @@ function ExpenseModal({ categories, onClose, onSubmit }: any) {
             <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 outline-none">
               <option value="">No category</option>
-              {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {categories.map((c: ExpenseCategory) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
@@ -157,14 +200,14 @@ function ExpenseModal({ categories, onClose, onSubmit }: any) {
   );
 }
 
-function CategoryModal({ categories, onClose, onCreate, onDelete }: any) {
+function CategoryModal({ categories, onClose, onCreate, onDelete }: { categories: ExpenseCategory[]; onClose: () => void; onCreate: (name: string) => void; onDelete: (id: number) => void }) {
   const [name, setName] = useState('');
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl p-6 w-full max-w-md">
         <h3 className="text-lg font-semibold mb-4">Manage Categories</h3>
         <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-          {categories.map((c: any) => (
+          {categories.map((c: ExpenseCategory) => (
             <div key={c.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-900">{c.name}</span>
               {!c.is_default && (

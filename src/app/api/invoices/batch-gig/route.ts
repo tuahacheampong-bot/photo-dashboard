@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
-import { requireOwner, validateRequired, validateDate, validateLength, firstError } from '@/lib/api-auth';
+import { requireOwner, validateDate, validateLength, firstError } from '@/lib/api-auth';
+import type { Invoice } from '@/lib/types';
+
+interface DefaultsInput {
+  photographer_split?: string | number;
+  retoucher_split?: string | number;
+}
 
 // POST /api/invoices/batch-gig - Create gigs from multiple invoices
 export async function POST(request: NextRequest) {
@@ -9,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as { invoice_ids: number[]; defaults?: DefaultsInput };
     const { invoice_ids, defaults } = body;
 
     if (!Array.isArray(invoice_ids) || invoice_ids.length === 0) {
@@ -21,17 +27,17 @@ export async function POST(request: NextRequest) {
     }
 
     const d = defaults || {};
-    const photoSplit = parseFloat(d.photographer_split) || 30;
-    const retouchSplit = parseFloat(d.retoucher_split) || 30;
+    const photoSplit = parseFloat(String(d.photographer_split)) || 30;
+    const retouchSplit = parseFloat(String(d.retoucher_split)) || 30;
 
     const created: { gig_id: number; invoice_id: number; title: string }[] = [];
     const errors: { invoice_id: number; error: string }[] = [];
 
     // Fetch all invoices
     const placeholders = invoice_ids.map(() => '?').join(',');
-    const invoices = db.prepare(`SELECT * FROM invoices WHERE id IN (${placeholders})`).all(...invoice_ids) as any[];
+    const invoices = db.prepare(`SELECT * FROM invoices WHERE id IN (${placeholders})`).all(...invoice_ids) as Invoice[];
 
-    const invoiceMap = new Map<number, any>();
+    const invoiceMap = new Map<number, Invoice>();
     for (const inv of invoices) {
       invoiceMap.set(inv.id, inv);
     }
@@ -101,8 +107,9 @@ export async function POST(request: NextRequest) {
         }
 
         created.push({ gig_id: gigId, invoice_id: invId, title });
-      } catch (e: any) {
-        errors.push({ invoice_id: invId, error: e.message || 'Failed to create gig' });
+      } catch (e) {
+        const err = e as Error;
+        errors.push({ invoice_id: invId, error: err.message || 'Failed to create gig' });
       }
     }
 

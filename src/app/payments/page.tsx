@@ -1,14 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { formatCurrency } from '@/lib/utils';
 
+interface ClientPayment {
+  id: number;
+  gig_id: number;
+  invoice_id: number | null;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string | null;
+  notes: string | null;
+  created_at: string;
+  gig_title: string;
+  client_name: string;
+}
+
+interface WorkerPayment {
+  id: number;
+  gig_id: number;
+  worker_id: number;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number: string | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  gig_title: string;
+  worker_name: string;
+}
+
+interface PaymentsData {
+  client_payments: ClientPayment[];
+  worker_payments: WorkerPayment[];
+}
+
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<any>({ client_payments: [], worker_payments: [] });
+  const [payments, setPayments] = useState<PaymentsData>({ client_payments: [], worker_payments: [] });
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'client' | 'worker'>('client');
-
-  useEffect(() => { fetchPayments(); }, []);
 
   const fetchPayments = async () => {
     const res = await fetch('/api/payments?type=all');
@@ -16,8 +48,17 @@ export default function PaymentsPage() {
     setLoading(false);
   };
 
-  const totalClient = payments.client_payments.reduce((s: number, p: any) => s + p.amount, 0);
-  const totalWorker = payments.worker_payments.reduce((s: number, p: any) => s + p.amount, 0);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchPayments();
+    }
+  }, []);
+
+  const totalClient = payments.client_payments.reduce((s: number, p: ClientPayment) => s + p.amount, 0);
+  const totalWorker = payments.worker_payments.reduce((s: number, p: WorkerPayment) => s + p.amount, 0);
 
   return (
     <div className="space-y-6">
@@ -53,7 +94,7 @@ export default function PaymentsPage() {
               <p className="text-center py-12 text-gray-400">No client payments yet</p>
             ) : (
               <div className="divide-y divide-gray-200">
-                {payments.client_payments.map((p: any) => (
+                {payments.client_payments.map((p: ClientPayment) => (
                   <div key={p.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                     <div>
                       <p className="font-medium text-gray-900">{p.gig_title}</p>
@@ -69,7 +110,7 @@ export default function PaymentsPage() {
               <p className="text-center py-12 text-gray-400">No worker payments yet</p>
             ) : (
               <div className="divide-y divide-gray-200">
-                {payments.worker_payments.map((p: any) => (
+                {payments.worker_payments.map((p: WorkerPayment) => (
                   <div key={p.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
                     <div>
                       <p className="font-medium text-gray-900">{p.worker_name}</p>

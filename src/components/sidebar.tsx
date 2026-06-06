@@ -4,6 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useState } from 'react';
+import type { UserRole } from '@/lib/types';
+
+interface ExtendedUser {
+  name?: string | null;
+  email?: string | null;
+  role?: UserRole;
+}
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
@@ -82,7 +89,7 @@ export default function Sidebar() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{session?.user?.name || 'User'}</p>
-                <p className="text-xs text-gray-400 truncate">{(session?.user as any)?.role || 'worker'}</p>
+                <p className="text-xs text-gray-400 truncate">{(session?.user as ExtendedUser)?.role || 'worker'}</p>
               </div>
               <button onClick={() => signOut({ callbackUrl: '/login' })}
                 className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800" title="Sign out">

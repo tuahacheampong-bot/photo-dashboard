@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
 
     const tokens = await exchangeCodeForTokens(code, client_id, client_secret, region, REDIRECT_URI);
     return NextResponse.json(tokens);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 400 });
+  } catch (e) {
+    const err = e as Error;
+    return NextResponse.json({ error: err.message }, { status: 400 });
   }
 }

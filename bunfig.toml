@@ -1,0 +1,9 @@
+[install]
+cache = true
+
+[test]
+root = "./src"
+preload = []
+
+[tsconfig]
+extends = "./tsconfig.json"

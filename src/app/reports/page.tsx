@@ -1,19 +1,77 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { formatCurrency } from '@/lib/utils';
 
+interface SummaryReport {
+  revenue: number;
+  expenses: number;
+  client_payments: number;
+  worker_payments: number;
+  profit: number;
+  outstanding: number;
+  gig_count: number;
+}
+
+interface GigReport {
+  id: number;
+  title: string;
+  client_name: string;
+  gig_date: string;
+  total_amount: number;
+  status: string;
+  total_paid: number;
+  outstanding: number;
+  worker_cost: number;
+}
+
+interface WorkerReport {
+  id: number;
+  name: string;
+  skills: string;
+  gig_count: number;
+  total_earned: number;
+  pending_amount: number;
+}
+
+interface MonthlyReport {
+  month: string;
+  revenue: number;
+  gig_count: number;
+}
+
+interface MonthlyExpenseReport {
+  month: string;
+  expenses: number;
+}
+
+interface MonthlyWorkerPaymentReport {
+  month: string;
+  worker_payments: number;
+}
+
+interface MonthlyReportsResponse {
+  months: MonthlyReport[];
+  monthlyExpenses: MonthlyExpenseReport[];
+  monthlyWorkerPayments: MonthlyWorkerPaymentReport[];
+}
+
+interface ExpenseCategoryReport {
+  name: string;
+  total: number;
+}
+
 export default function ReportsPage() {
-  const [summary, setSummary] = useState<any>(null);
-  const [byGig, setByGig] = useState<any[]>([]);
-  const [byWorker, setByWorker] = useState<any[]>([]);
-  const [monthly, setMonthly] = useState<any>(null);
-  const [expenseByCategory, setExpenseByCategory] = useState<any[]>([]);
+  const [summary, setSummary] = useState<SummaryReport | null>(null);
+  const [byGig, setByGig] = useState<GigReport[]>([]);
+  const [byWorker, setByWorker] = useState<WorkerReport[]>([]);
+  const [monthly, setMonthly] = useState<MonthlyReportsResponse | null>(null);
+  const [expenseByCategory, setExpenseByCategory] = useState<ExpenseCategoryReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('month');
   const [activeTab, setActiveTab] = useState('summary');
 
-  useEffect(() => { fetchReports(); }, [period]);
+  const loadedRef = useRef(false);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -32,9 +90,16 @@ export default function ReportsPage() {
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchReports();
+    }
+  }, [period, fetchReports]);
+
   const exportCSV = () => {
     let csv = '';
-    if (activeTab === 'summary') {
+    if (activeTab === 'summary' && summary) {
       csv = 'Metric,Amount\n';
       csv += `Revenue,${summary.revenue}\n`;
       csv += `Expenses,${summary.expenses}\n`;
@@ -44,12 +109,12 @@ export default function ReportsPage() {
       csv += `Outstanding,${summary.outstanding}\n`;
     } else if (activeTab === 'by_gig') {
       csv = 'Gig,Client,Date,Amount,Paid,Outstanding,Worker Cost\n';
-      byGig.forEach((g: any) => {
+      byGig.forEach((g: GigReport) => {
         csv += `"${g.title}","${g.client_name}",${g.gig_date},${g.total_amount},${g.total_paid},${g.outstanding},${g.worker_cost}\n`;
       });
     } else if (activeTab === 'by_worker') {
       csv = 'Worker,Skills,Gigs,Total Earned,Pending\n';
-      byWorker.forEach((w: any) => {
+      byWorker.forEach((w: WorkerReport) => {
         csv += `"${w.name}",${w.skills},${w.gig_count},${w.total_earned},${w.pending_amount}\n`;
       });
     }
@@ -136,7 +201,7 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {byGig.map((g: any) => (
+                {byGig.map((g: GigReport) => (
                   <tr key={g.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{g.title}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">{g.client_name}</td>
@@ -166,7 +231,7 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {byWorker.map((w: any) => (
+                {byWorker.map((w: WorkerReport) => (
                   <tr key={w.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{w.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 capitalize">{w.skills}</td>
@@ -186,8 +251,8 @@ export default function ReportsPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Revenue</h3>
             <div className="space-y-3">
-              {monthly.months?.map((m: any) => {
-                const maxRev = Math.max(...monthly.months.map((x: any) => x.revenue), 1);
+              {monthly.months?.map((m: MonthlyReport) => {
+                const maxRev = Math.max(...monthly.months.map((x) => x.revenue), 1);
                 return (
                   <div key={m.month} className="space-y-1">
                     <div className="flex justify-between text-sm">
@@ -205,9 +270,9 @@ export default function ReportsPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Expense by Category</h3>
             <div className="space-y-3">
-              {expenseByCategory.map((c: any, i: number) => {
+              {expenseByCategory.map((c: ExpenseCategoryReport, i: number) => {
                 const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-purple-500'];
-                const maxVal = Math.max(...expenseByCategory.map((x: any) => x.total), 1);
+                const maxVal = Math.max(...expenseByCategory.map((x) => x.total), 1);
                 return (
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between text-sm">
@@ -233,8 +298,8 @@ export default function ReportsPage() {
             <p className="text-gray-400 text-center py-8">No expenses recorded</p>
           ) : (
             <div className="space-y-4">
-              {expenseByCategory.map((c: any, i: number) => {
-                const total = expenseByCategory.reduce((s: number, x: any) => s + x.total, 0);
+              {expenseByCategory.map((c: ExpenseCategoryReport, i: number) => {
+                const total = expenseByCategory.reduce((s: number, x: ExpenseCategoryReport) => s + x.total, 0);
                 const pct = total > 0 ? ((c.total / total) * 100).toFixed(1) : '0';
                 const colors = ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-blue-400', 'bg-purple-400', 'bg-pink-400'];
                 return (

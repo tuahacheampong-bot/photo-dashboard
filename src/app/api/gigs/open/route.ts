@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth } from '@/lib/api-auth';
+import type { Gig } from '@/lib/types';
+
+interface OpenGig extends Gig {
+  total_paid: number;
+  outstanding: number;
+  worker_count: number;
+  assigned_workers: string | null;
+}
 
 // GET /api/gigs/open - List gigs without workers assigned (for workers to pick)
 export async function GET(request: NextRequest) {
@@ -28,7 +36,7 @@ export async function GET(request: NextRequest) {
     `;
 
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     if (search) {
       conditions.push('(g.title LIKE ? OR g.client_name LIKE ?)');
@@ -51,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     query += ' GROUP BY g.id ORDER BY g.gig_date ASC';
 
-    const gigs = db.prepare(query).all(...params);
+    const gigs = db.prepare(query).all(...params) as OpenGig[];
     return NextResponse.json(gigs);
   } catch (error) {
     console.error('Error fetching open gigs:', error);

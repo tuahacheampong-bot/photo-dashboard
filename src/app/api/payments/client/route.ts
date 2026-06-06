@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireOwner, validateRequired, validatePositiveNumber, validateDate, validateEnum, firstError } from '@/lib/api-auth';
+import type { Gig, ClientPayment, Invoice } from '@/lib/types';
+
+interface SumResult { total: number; }
 
 // POST /api/payments/client - Record a client payment
 export async function POST(request: NextRequest) {
@@ -9,7 +12,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as {
+      gig_id: number;
+      invoice_id?: number | null;
+      amount: number;
+      payment_date: string;
+      payment_method?: string;
+      reference_number?: string | null;
+      notes?: string | null;
+    };
     const { gig_id, invoice_id, amount, payment_date, payment_method, reference_number, notes } = body;
 
     const err = firstError(
@@ -27,14 +38,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if payment exceeds gig total
-    const gig = db.prepare('SELECT total_amount FROM gigs WHERE id = ?').get(gig_id) as any;
+    const gig = db.prepare('SELECT total_amount FROM gigs WHERE id = ?').get(gig_id) as Gig | null;
     if (!gig) {
       return NextResponse.json({ error: 'Gig not found' }, { status: 404 });
     }
 
     const existingPayments = db.prepare(
       'SELECT COALESCE(SUM(amount), 0) as total FROM client_payments WHERE gig_id = ?'
-    ).get(gig_id) as any;
+    ).get(gig_id) as SumResult;
 
     const remaining = gig.total_amount - existingPayments.total;
 
@@ -48,7 +59,7 @@ export async function POST(request: NextRequest) {
     // Check for duplicate payment on same date with same amount
     const duplicate = db.prepare(
       'SELECT id FROM client_payments WHERE gig_id = ? AND amount = ? AND payment_date = ?'
-    ).get(gig_id, amount, payment_date) as any;
+    ).get(gig_id, amount, payment_date) as ClientPayment | null;
 
     if (duplicate) {
       return NextResponse.json(
@@ -61,20 +72,20 @@ export async function POST(request: NextRequest) {
       INSERT INTO client_payments (gig_id, invoice_id, amount, payment_date, payment_method, reference_number, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      gig_id, invoice_id || null, amount, payment_date,
-      payment_method || 'cash', reference_number || null, notes || null
+      gig_id, invoice_id ?? null, amount, payment_date,
+      payment_method || 'cash', reference_number ?? null, notes ?? null
     );
 
     // Update invoice status if linked
     if (invoice_id) {
       const totalPaid = db.prepare(
         'SELECT COALESCE(SUM(amount), 0) as total FROM client_payments WHERE invoice_id = ?'
-      ).get(invoice_id) as any;
+      ).get(invoice_id) as SumResult;
 
-      const invoice = db.prepare('SELECT total_amount FROM invoices WHERE id = ?').get(invoice_id) as any;
+      const invoice = db.prepare('SELECT total_amount FROM invoices WHERE id = ?').get(invoice_id) as Invoice | null;
 
       let newStatus = 'partial';
-      if (totalPaid.total >= invoice.total_amount) {
+      if (invoice && totalPaid.total >= invoice.total_amount) {
         newStatus = 'paid';
       }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 
@@ -37,7 +37,7 @@ export default function GigsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showBatch, setShowBatch] = useState(false);
 
-  useEffect(() => { fetchGigs(); }, [statusFilter, search, dateFrom, dateTo]);
+  const loadedRef = useRef(false);
 
   const fetchGigs = async () => {
     setLoading(true);
@@ -50,6 +50,13 @@ export default function GigsPage() {
     setGigs(await res.json());
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchGigs();
+    }
+  }, [statusFilter, search, dateFrom, dateTo, fetchGigs]);
 
   const deleteGig = async (id: number) => {
     if (!confirm('Delete this gig?')) return;
@@ -301,7 +308,7 @@ function BatchCreateModal({ onClose, onComplete }: { onClose: () => void; onComp
     } else {
       const err = await res.json();
       if (err.details) {
-        setError(err.details.map((d: any) => `Row ${d.index}: ${d.error}`).join('; '));
+        setError(err.details.map((d: { index: number; error: string }) => `Row ${d.index}: ${d.error}`).join('; '));
       } else {
         setError(err.error || 'Failed to create gigs');
       }

@@ -2,6 +2,43 @@ import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireOwner, validateRequired, validatePositiveNumber, validateDate, validateLength, validateEnum, firstError } from '@/lib/api-auth';
 
+interface GigInput {
+  title?: string;
+  client_name?: string;
+  client_email?: string | null;
+  client_phone?: string | null;
+  gig_date?: string;
+  location?: string | null;
+  description?: string | null;
+  total_amount?: string | number;
+  photographer_split?: string | number;
+  retoucher_split?: string | number;
+  invoice_reference?: string | null;
+  status?: string;
+}
+
+interface DefaultsInput {
+  photographer_split?: string | number;
+  retoucher_split?: string | number;
+  status?: string;
+}
+
+interface EnrichedGig {
+  title: string;
+  client_name: string;
+  client_email: string | null;
+  client_phone: string | null;
+  gig_date: string;
+  location: string | null;
+  description: string | null;
+  total_amount: number;
+  photographer_split: number;
+  retoucher_split: number;
+  invoice_reference: string | null;
+  status: string;
+  [key: string]: unknown;
+}
+
 // POST /api/gigs/batch - Create multiple gigs at once
 export async function POST(request: NextRequest) {
   const authResult = await requireOwner();
@@ -9,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as { gigs: GigInput[]; defaults?: DefaultsInput };
     const { gigs, defaults } = body;
 
     if (!Array.isArray(gigs) || gigs.length === 0) {
@@ -22,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     // Apply defaults to each gig
     const d = defaults || {};
-    const enrichedGigs = gigs.map((g: any, i: number) => ({
+    const enrichedGigs = gigs.map((g: GigInput, i: number): EnrichedGig => ({
       title: g.title || `Gig ${i + 1}`,
       client_name: g.client_name || '',
       client_email: g.client_email || null,
@@ -30,9 +67,9 @@ export async function POST(request: NextRequest) {
       gig_date: g.gig_date || new Date().toISOString().split('T')[0],
       location: g.location || null,
       description: g.description || null,
-      total_amount: parseFloat(g.total_amount) || 0,
-      photographer_split: parseFloat(g.photographer_split ?? d.photographer_split ?? 30),
-      retoucher_split: parseFloat(g.retoucher_split ?? d.retoucher_split ?? 30),
+      total_amount: parseFloat(String(g.total_amount)) || 0,
+      photographer_split: parseFloat(String(g.photographer_split ?? d.photographer_split ?? 30)),
+      retoucher_split: parseFloat(String(g.retoucher_split ?? d.retoucher_split ?? 30)),
       invoice_reference: g.invoice_reference || null,
       status: g.status || d.status || 'pending',
     }));

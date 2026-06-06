@@ -29,9 +29,24 @@ interface PaymentRecord {
   notes: string;
 }
 
+interface WorkerDetail {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  skills: string;
+  rate_per_gig: number;
+  total_owed: number;
+  total_paid: number;
+  outstanding: number;
+  gig_count: number;
+  gig_breakdown: GigBreakdown[];
+  payment_history: PaymentRecord[];
+}
+
 export default function WorkerDetailPage() {
   const params = useParams();
-  const [worker, setWorker] = useState<any>(null);
+  const [worker, setWorker] = useState<WorkerDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchWorker = () => {

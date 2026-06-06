@@ -1,11 +1,51 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 
+interface Invoice {
+  id: number;
+  invoice_number: string;
+  client_name: string;
+  client_email?: string | null;
+  client_phone?: string | null;
+  amount: number;
+  tax_amount: number;
+  total_amount: number;
+  amount_paid: number;
+  balance: number;
+  due_date?: string | null;
+  status: string;
+  source: string;
+  zoho_invoice_id?: string | null;
+  gig_id?: number | null;
+  created_at: string;
+}
+
+interface ZohoSettings {
+  configured: boolean;
+  refresh_token: string;
+}
+
+interface CreateGigData {
+  invoice_id: number;
+  title?: string;
+  gig_date?: string;
+  location?: string;
+  description?: string;
+  photographer_split?: number;
+  retoucher_split?: number;
+  workers?: Array<{ worker_id: number; role: string }>;
+}
+
+interface CreateGigResult {
+  gig_id?: number;
+  error?: string;
+}
+
 export default function InvoicesPage() {
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -14,14 +54,11 @@ export default function InvoicesPage() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncOk, setSyncOk] = useState(true);
   const [zohoReady, setZohoReady] = useState(false);
-  const [showGigModal, setShowGigModal] = useState<any>(null);
+  const [showGigModal, setShowGigModal] = useState<Invoice | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
 
-  useEffect(() => {
-    fetchInvoices();
-    fetch('/api/zoho/settings').then(r => r.json()).then(d => setZohoReady(d.configured && d.refresh_token !== '***')).catch(() => {});
-  }, [statusFilter, search]);
+  const loadedRef = useRef(false);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -38,6 +75,17 @@ export default function InvoicesPage() {
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchInvoices();
+      fetch('/api/zoho/settings')
+        .then(r => r.json())
+        .then((d: ZohoSettings) => setZohoReady(d.configured && d.refresh_token !== '***'))
+        .catch(() => {});
+    }
+  }, [statusFilter, search, fetchInvoices]);
 
   const sync = async () => {
     setSyncing(true);
@@ -61,13 +109,13 @@ export default function InvoicesPage() {
     setTimeout(() => setSyncMsg(null), 5000);
   };
 
-  const createGigFromInvoice = async (data: any) => {
+  const createGigFromInvoice = async (data: CreateGigData) => {
     const res = await fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'create_gig_from_invoice', ...data }),
     });
-    const result = await res.json();
+    const result = await res.json() as CreateGigResult;
     if (res.ok) {
       setShowGigModal(null);
       fetchInvoices();
@@ -188,7 +236,7 @@ export default function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {invoices.map((inv: any) => {
+                {invoices.map((inv: Invoice) => {
                   const hasGig = !!inv.gig_id;
                   return (
                     <tr key={inv.id} className={`hover:bg-gray-50 ${selected.includes(inv.id) ? 'bg-green-50' : ''} ${hasGig ? 'opacity-60' : ''}`}>
@@ -244,8 +292,15 @@ export default function InvoicesPage() {
   );
 }
 
+interface CreateInvoiceForm {
+  invoice_number: string;
+  client_name: string;
+  total_amount: string;
+  due_date: string;
+}
+
 function CreateModal({ onClose }: { onClose: () => void }) {
-  const [f, setF] = useState({ invoice_number: '', client_name: '', total_amount: '', due_date: '' });
+  const [f, setF] = useState<CreateInvoiceForm>({ invoice_number: '', client_name: '', total_amount: '', due_date: '' });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     await fetch('/api/invoices', {
@@ -286,12 +341,32 @@ function CreateModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function GigFromInvoiceModal({ invoice, onClose, onSubmit }: any) {
-  const [workers, setWorkers] = useState<any[]>([]);
+interface Worker {
+  id: number;
+  name: string;
+  skills: string;
+}
+
+interface AssignedWorker {
+  worker_id: number;
+  role: string;
+}
+
+interface GigFormData {
+  title: string;
+  gig_date: string;
+  location: string;
+  description: string;
+  photographer_split: string;
+  retoucher_split: string;
+}
+
+function GigFromInvoiceModal({ invoice, onClose, onSubmit }: { invoice: Invoice; onClose: () => void; onSubmit: (data: CreateGigData) => void }) {
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [workersLoaded, setWorkersLoaded] = useState(false);
-  const [assignedWorkers, setAssignedWorkers] = useState<any[]>([]);
+  const [assignedWorkers, setAssignedWorkers] = useState<AssignedWorker[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<GigFormData>({
     title: `Gig - ${invoice.client_name}`,
     gig_date: invoice.due_date || new Date().toISOString().split('T')[0],
     location: '',
@@ -301,10 +376,13 @@ function GigFromInvoiceModal({ invoice, onClose, onSubmit }: any) {
   });
 
   useEffect(() => {
-    fetch('/api/workers').then(r => r.json()).then(d => {
-      setWorkers(d);
-      setWorkersLoaded(true);
-    }).catch(() => setWorkersLoaded(true));
+    fetch('/api/workers')
+      .then(r => r.json())
+      .then((d: Worker[]) => {
+        setWorkers(d);
+        setWorkersLoaded(true);
+      })
+      .catch(() => setWorkersLoaded(true));
   }, []);
 
   const toggleWorkerRole = (workerId: number, role: string) => {
@@ -331,7 +409,13 @@ function GigFromInvoiceModal({ invoice, onClose, onSubmit }: any) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    await onSubmit({ invoice_id: invoice.id, ...form, workers: assignedWorkers });
+    await onSubmit({ 
+      invoice_id: invoice.id, 
+      ...form, 
+      photographer_split: parseFloat(form.photographer_split) || 30,
+      retoucher_split: parseFloat(form.retoucher_split) || 30,
+      workers: assignedWorkers 
+    });
     setSubmitting(false);
   };
 
@@ -483,7 +567,15 @@ function GigFromInvoiceModal({ invoice, onClose, onSubmit }: any) {
   );
 }
 
-function BatchGigFromInvoiceModal({ invoices, onClose, onComplete }: { invoices: any[]; onClose: () => void; onComplete: () => void }) {
+interface BatchInvoice {
+  id: number;
+  invoice_number: string;
+  client_name: string;
+  total_amount: number;
+  status: string;
+}
+
+function BatchGigFromInvoiceModal({ invoices, onClose, onComplete }: { invoices: BatchInvoice[]; onClose: () => void; onComplete: () => void }) {
   const [photographerSplit, setPhotographerSplit] = useState('30');
   const [retoucherSplit, setRetoucherSplit] = useState('30');
   const [submitting, setSubmitting] = useState(false);

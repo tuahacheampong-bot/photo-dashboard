@@ -1,6 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth, requireOwner, validateRequired, validateEmail, validateLength, validateEnum, firstError } from '@/lib/api-auth';
+import type { Worker, WorkerPayment } from '@/lib/types';
+
+interface CountResult { count: number; }
+interface SumResult { total: number; }
+interface GigAssignment {
+  gig_id: number;
+  role: string;
+  custom_split: number | null;
+  title: string;
+  gig_date: string;
+  total_amount: number;
+  photographer_split: number;
+  retoucher_split: number;
+  status: string;
+}
+
+interface GigBreakdownItem {
+  gig_id: number;
+  title: string;
+  gig_date: string;
+  gig_total: number;
+  role: string;
+  split_percent: number;
+  amount_owed: number;
+  amount_paid: number;
+  outstanding: number;
+  status: string;
+}
+
+interface WorkerPaymentWithGig extends WorkerPayment {
+  gig_title: string;
+}
 
 // GET /api/workers/[id] - Get a single worker with full outstanding breakdown
 export async function GET(
@@ -18,7 +50,7 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid worker ID' }, { status: 400 });
     }
 
-    const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(id) as any;
+    const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(id) as Worker | null;
     if (!worker) {
       return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
     }
@@ -31,14 +63,14 @@ export async function GET(
       JOIN gigs g ON gw.gig_id = g.id
       WHERE gw.worker_id = ? AND g.status != 'cancelled'
       ORDER BY g.gig_date DESC
-    `).all(id) as any[];
+    `).all(id) as GigAssignment[];
 
     // Compute per-gig breakdown (combine all roles for the same gig into one entry)
     let totalOwed = 0;
     let totalPaid = 0;
 
     // Group assignments by gig_id
-    const gigMap = new Map<number, { roles: any[]; info: any }>();
+    const gigMap = new Map<number, { roles: GigAssignment[]; info: GigAssignment }>();
     for (const assignment of gigAssignments) {
       const existing = gigMap.get(assignment.gig_id);
       if (existing) {
@@ -60,7 +92,7 @@ export async function GET(
 
         const roleCount = db.prepare(
           'SELECT COUNT(*) as count FROM gig_workers WHERE gig_id = ? AND role = ?'
-        ).get(gigId, assignment.role) as any;
+        ).get(gigId, assignment.role) as CountResult;
 
         amountOwed += (info.total_amount * split) / 100 / roleCount.count;
       }
@@ -68,7 +100,7 @@ export async function GET(
       // Sum payments for this worker on this gig (across all roles)
       const paymentResult = db.prepare(
         "SELECT COALESCE(SUM(amount), 0) as total FROM worker_payments WHERE gig_id = ? AND worker_id = ? AND status = 'paid'"
-      ).get(gigId, id) as any;
+      ).get(gigId, id) as SumResult;
 
       const amountPaid = paymentResult.total || 0;
       const outstanding = Math.max(0, amountOwed - amountPaid);
@@ -77,7 +109,7 @@ export async function GET(
       totalPaid += amountPaid;
 
       // Build role labels
-      const roleLabels = roles.map((r: any) => {
+      const roleLabels = roles.map((r) => {
         const split = r.custom_split
           ? r.custom_split
           : r.role === 'photographer' ? info.photographer_split : info.retoucher_split;
@@ -90,7 +122,7 @@ export async function GET(
         gig_date: info.gig_date,
         gig_total: info.total_amount,
         role: roleLabels.join(' + '),
-        split_percent: roles.reduce((sum: number, r: any) => {
+        split_percent: roles.reduce((sum: number, r) => {
           const s = r.custom_split
             ? r.custom_split
             : r.role === 'photographer' ? info.photographer_split : info.retoucher_split;
@@ -100,7 +132,7 @@ export async function GET(
         amount_paid: amountPaid,
         outstanding,
         status: info.status,
-      };
+      } as GigBreakdownItem;
     });
 
     // Get all individual payment records
@@ -110,7 +142,7 @@ export async function GET(
       JOIN gigs g ON wp.gig_id = g.id
       WHERE wp.worker_id = ?
       ORDER BY wp.payment_date DESC
-    `).all(id);
+    `).all(id) as WorkerPaymentWithGig[];
 
     return NextResponse.json({
       ...worker,
@@ -142,7 +174,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid worker ID' }, { status: 400 });
     }
 
-    const body = await request.json();
+    const body = await request.json() as {
+      name: string;
+      email?: string | null;
+      phone?: string | null;
+      skills?: string;
+      rate_per_gig?: number;
+    };
     const { name, email, phone, skills, rate_per_gig } = body;
 
     const err = firstError(

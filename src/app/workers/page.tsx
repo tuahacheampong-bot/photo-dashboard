@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 
@@ -30,6 +30,14 @@ interface GigBreakdown {
   outstanding: number;
 }
 
+interface WorkerFormData {
+  name: string;
+  email: string;
+  phone: string;
+  skills: string;
+  rate_per_gig: number;
+}
+
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +47,7 @@ export default function WorkersPage() {
   const [editWorker, setEditWorker] = useState<Worker | null>(null);
   const [payWorker, setPayWorker] = useState<Worker | null>(null);
 
-  useEffect(() => { fetchWorkers(); }, [search, skillFilter]);
+  const loadedRef = useRef(false);
 
   const fetchWorkers = async () => {
     setLoading(true);
@@ -51,7 +59,14 @@ export default function WorkersPage() {
     setLoading(false);
   };
 
-  const handleCreate = async (data: any) => {
+  useEffect(() => {
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      fetchWorkers();
+    }
+  }, [search, skillFilter, fetchWorkers]);
+
+  const handleCreate = async (data: WorkerFormData) => {
     const res = await fetch('/api/workers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -61,7 +76,7 @@ export default function WorkersPage() {
     else { const err = await res.json(); alert(err.error); }
   };
 
-  const handleUpdate = async (data: any) => {
+  const handleUpdate = async (data: WorkerFormData) => {
     if (!editWorker) return;
     const res = await fetch(`/api/workers/${editWorker.id}`, {
       method: 'PUT',
@@ -190,7 +205,7 @@ export default function WorkersPage() {
   );
 }
 
-function WorkerModal({ title, worker, onClose, onSubmit }: { title: string; worker?: Worker; onClose: () => void; onSubmit: (data: any) => void }) {
+function WorkerModal({ title, worker, onClose, onSubmit }: { title: string; worker?: Worker; onClose: () => void; onSubmit: (data: WorkerFormData) => void }) {
   const [form, setForm] = useState({
     name: worker?.name || '',
     email: worker?.email || '',

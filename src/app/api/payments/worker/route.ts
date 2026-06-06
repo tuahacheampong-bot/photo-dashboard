@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireOwner, validateRequired, validatePositiveNumber, validateDate, validateEnum, firstError } from '@/lib/api-auth';
+import type { Gig, WorkerPayment } from '@/lib/types';
+
+interface SumResult { total: number; }
+interface CountResult { count: number; }
+interface WorkerRole { role: string; }
+interface WorkerAssignment { role: string; custom_split: number | null; }
 
 // POST /api/payments/worker - Record a worker payment
 export async function POST(request: NextRequest) {
@@ -9,7 +15,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as {
+      gig_id: number;
+      worker_id: number;
+      amount: number;
+      payment_date: string;
+      payment_method?: string;
+      reference_number?: string | null;
+      notes?: string | null;
+    };
     const { gig_id, worker_id, amount, payment_date, payment_method, reference_number, notes } = body;
 
     const err = firstError(
@@ -22,7 +36,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: err }, { status: 400 });
     }
 
-    const gig = db.prepare('SELECT * FROM gigs WHERE id = ?').get(gig_id) as any;
+    const gig = db.prepare('SELECT * FROM gigs WHERE id = ?').get(gig_id) as Gig | null;
     if (!gig) {
       return NextResponse.json({ error: 'Gig not found' }, { status: 404 });
     }
@@ -30,7 +44,7 @@ export async function POST(request: NextRequest) {
     // Get ALL roles for this worker on this gig
     const workerRoles = db.prepare(
       'SELECT role FROM gig_workers WHERE gig_id = ? AND worker_id = ?'
-    ).all(gig_id, worker_id) as any[];
+    ).all(gig_id, worker_id) as WorkerRole[];
 
     if (workerRoles.length === 0) {
       return NextResponse.json({ error: 'Worker not assigned to this gig' }, { status: 400 });
@@ -39,7 +53,7 @@ export async function POST(request: NextRequest) {
     // Get full gig_worker rows to check for custom_split
     const workerAssignments = db.prepare(
       'SELECT role, custom_split FROM gig_workers WHERE gig_id = ? AND worker_id = ?'
-    ).all(gig_id, worker_id) as any[];
+    ).all(gig_id, worker_id) as WorkerAssignment[];
 
     // Calculate expected amount for ALL roles combined
     let expectedPerWorker = 0;
@@ -49,14 +63,14 @@ export async function POST(request: NextRequest) {
         : wr.role === 'photographer' ? gig.photographer_split : gig.retoucher_split;
       const roleCount = db.prepare(
         'SELECT COUNT(*) as count FROM gig_workers WHERE gig_id = ? AND role = ?'
-      ).get(gig_id, wr.role) as any;
+      ).get(gig_id, wr.role) as CountResult;
       expectedPerWorker += (gig.total_amount * split) / 100 / roleCount.count;
     }
 
     // Check existing payments for this worker on this gig
     const existingPayments = db.prepare(
       'SELECT COALESCE(SUM(amount), 0) as total FROM worker_payments WHERE gig_id = ? AND worker_id = ?'
-    ).get(gig_id, worker_id) as any;
+    ).get(gig_id, worker_id) as SumResult;
 
     if (existingPayments.total + amount > expectedPerWorker + 0.01) {
       return NextResponse.json(
@@ -68,7 +82,7 @@ export async function POST(request: NextRequest) {
     // Prevent duplicate payment for same date
     const existingSameDate = db.prepare(
       'SELECT id FROM worker_payments WHERE gig_id = ? AND worker_id = ? AND payment_date = ?'
-    ).get(gig_id, worker_id, payment_date) as any;
+    ).get(gig_id, worker_id, payment_date) as WorkerPayment | null;
 
     if (existingSameDate) {
       return NextResponse.json(
@@ -82,7 +96,7 @@ export async function POST(request: NextRequest) {
       VALUES (?, ?, ?, ?, ?, ?, ?, 'paid')
     `).run(
       gig_id, worker_id, amount, payment_date,
-      payment_method || 'cash', reference_number || null, notes || null
+      payment_method || 'cash', reference_number ?? null, notes ?? null
     );
 
     return NextResponse.json({ id: result.lastInsertRowid, message: 'Worker payment recorded' });
@@ -106,7 +120,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Payment ID is required' }, { status: 400 });
     }
 
-    const payment = db.prepare('SELECT * FROM worker_payments WHERE id = ?').get(id) as any;
+    const payment = db.prepare('SELECT * FROM worker_payments WHERE id = ?').get(id) as WorkerPayment | null;
     if (!payment) {
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
     }

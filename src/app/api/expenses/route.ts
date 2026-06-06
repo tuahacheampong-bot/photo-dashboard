@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth, requireOwner, validateRequired, validatePositiveNumber, validateDate, firstError } from '@/lib/api-auth';
+import type { Expense, ExpenseCategory } from '@/lib/types';
+
+interface ExpenseWithDetails extends Expense {
+  category_name: string | null;
+  gig_title: string | null;
+}
+
+interface SumResult { total: number; }
 
 // GET /api/expenses - List all expenses
 export async function GET(request: NextRequest) {
@@ -23,7 +31,7 @@ export async function GET(request: NextRequest) {
     `;
 
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     if (category && category !== 'all') {
       conditions.push('e.category_id = ?');
@@ -51,17 +59,17 @@ export async function GET(request: NextRequest) {
 
     query += ' ORDER BY e.expense_date DESC';
 
-    const expenses = db.prepare(query).all(...params);
+    const expenses = db.prepare(query).all(...params) as ExpenseWithDetails[];
 
     // Get categories
-    const categories = db.prepare('SELECT * FROM expense_categories ORDER BY name').all();
+    const categories = db.prepare('SELECT * FROM expense_categories ORDER BY name').all() as ExpenseCategory[];
 
     // Get summary
     const totalExpenses = db.prepare(
       conditions.length > 0
         ? `SELECT COALESCE(SUM(amount), 0) as total FROM expenses e LEFT JOIN expense_categories ec ON e.category_id = ec.id WHERE ${conditions.join(' AND ')}`
         : 'SELECT COALESCE(SUM(amount), 0) as total FROM expenses'
-    ).get(...params) as any;
+    ).get(...params) as SumResult;
 
     return NextResponse.json({ expenses, categories, total: totalExpenses.total });
   } catch (error) {
@@ -77,7 +85,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as {
+      category_id?: number | null;
+      description: string;
+      amount: number;
+      expense_date: string;
+      gig_id?: number | null;
+      receipt_reference?: string | null;
+      notes?: string | null;
+    };
     const { category_id, description, amount, expense_date, gig_id, receipt_reference, notes } = body;
 
     const err = firstError(
@@ -93,8 +109,8 @@ export async function POST(request: NextRequest) {
       INSERT INTO expenses (category_id, description, amount, expense_date, gig_id, receipt_reference, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      category_id || null, description, amount, expense_date,
-      gig_id || null, receipt_reference || null, notes || null
+      category_id ?? null, description, amount, expense_date,
+      gig_id ?? null, receipt_reference ?? null, notes ?? null
     );
 
     return NextResponse.json({ id: result.lastInsertRowid, message: 'Expense recorded successfully' });

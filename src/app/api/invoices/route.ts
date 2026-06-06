@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { requireAuth, requireOwner, validateRequired, validatePositiveNumber, validateEmail, validateDate, validateLength, firstError } from '@/lib/api-auth';
+import type { Invoice, GigWorkerInput } from '@/lib/types';
+
+interface InvoiceWithGig extends Invoice {
+  gig_title?: string | null;
+}
 
 // GET /api/invoices - List all invoices
 export async function GET(request: NextRequest) {
@@ -17,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     let query = `SELECT i.* FROM invoices i`;
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     if (status && status !== 'all') {
       conditions.push('i.status = ?');
@@ -40,7 +45,7 @@ export async function GET(request: NextRequest) {
     }
     query += ' ORDER BY i.created_at DESC';
 
-    const invoices = db.prepare(query).all(...params);
+    const invoices = db.prepare(query).all(...params) as InvoiceWithGig[];
     return NextResponse.json(invoices);
   } catch (error) {
     console.error('Error fetching invoices:', error);
@@ -55,7 +60,28 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as {
+      action?: string;
+      invoice_id?: number;
+      title?: string;
+      gig_date?: string;
+      location?: string | null;
+      description?: string | null;
+      photographer_split?: number;
+      retoucher_split?: number;
+      workers?: GigWorkerInput[];
+      gig_id?: number | null;
+      invoice_number?: string;
+      client_name?: string;
+      client_email?: string | null;
+      amount?: number;
+      tax_amount?: number;
+      total_amount?: number;
+      due_date?: string | null;
+      status?: string;
+      source?: string;
+      zoho_invoice_id?: string | null;
+    };
 
     // Create gig from invoice
     if (body.action === 'create_gig_from_invoice') {
@@ -65,7 +91,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'invoice_id is required' }, { status: 400 });
       }
 
-      const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoice_id) as any;
+      const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoice_id) as Invoice | null;
       if (!invoice) {
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
       }
@@ -113,7 +139,7 @@ export async function POST(request: NextRequest) {
           'INSERT INTO gig_workers (gig_id, worker_id, role, custom_split) VALUES (?, ?, ?, ?)'
         );
         for (const worker of workers) {
-          insertWorker.run(gigId, worker.worker_id, worker.role, worker.custom_split || null);
+          insertWorker.run(gigId, worker.worker_id, worker.role, worker.custom_split ?? null);
         }
       }
 
@@ -122,7 +148,7 @@ export async function POST(request: NextRequest) {
         // Check for existing payment for this gig
         const existingPayment = db.prepare(
           'SELECT id FROM client_payments WHERE gig_id = ?'
-        ).get(gigId) as any;
+        ).get(gigId);
 
         // Also check if payment amount is valid
         if (!existingPayment && invoice.amount_paid <= invoice.total_amount && invoice.amount_paid > 0) {
@@ -165,9 +191,9 @@ export async function POST(request: NextRequest) {
       INSERT INTO invoices (gig_id, invoice_number, client_name, amount, tax_amount, total_amount, due_date, status, source, zoho_invoice_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      gig_id || null, invoice_number, client_name, amount || total_amount,
-      tax_amount || 0, total_amount, due_date || null,
-      status || 'pending', source || 'manual', zoho_invoice_id || null
+      gig_id ?? null, invoice_number, client_name, amount || total_amount,
+      tax_amount || 0, total_amount, due_date ?? null,
+      status || 'pending', source || 'manual', zoho_invoice_id ?? null
     );
 
     return NextResponse.json({ id: result.lastInsertRowid, message: 'Invoice created successfully' });

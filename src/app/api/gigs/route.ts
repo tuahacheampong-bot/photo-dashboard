@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { getZohoSettings, createZohoInvoice } from '@/lib/zoho';
 import { requireAuth, requireOwner, validateRequired, validatePositiveNumber, validateEmail, validateDate, validateLength, validateEnum, firstError } from '@/lib/api-auth';
+import type { GigWithDetails, GigWorkerInput, GigStatus } from '@/lib/types';
 
 // GET /api/gigs - List all gigs
 export async function GET(request: NextRequest) {
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     `;
 
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
 
     if (status && status !== 'all') {
       conditions.push('g.status = ?');
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     query += ' GROUP BY g.id ORDER BY g.gig_date DESC';
 
-    const gigs = db.prepare(query).all(...params);
+    const gigs = db.prepare(query).all(...params) as GigWithDetails[];
     return NextResponse.json(gigs);
   } catch (error) {
     console.error('Error fetching gigs:', error);
@@ -73,7 +74,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
-    const body = await request.json();
+    const body = await request.json() as {
+      title: string;
+      client_name: string;
+      client_email?: string | null;
+      client_phone?: string | null;
+      gig_date: string;
+      location?: string | null;
+      description?: string | null;
+      total_amount: number;
+      photographer_split?: number;
+      retoucher_split?: number;
+      invoice_reference?: string | null;
+      status?: GigStatus;
+      workers?: GigWorkerInput[];
+      create_invoice?: boolean;
+      invoice_number?: string;
+      invoice_due_date?: string | null;
+    };
     const {
       title, client_name, client_email, client_phone,
       gig_date, location, description, total_amount,
@@ -113,7 +131,7 @@ export async function POST(request: NextRequest) {
         'INSERT INTO gig_workers (gig_id, worker_id, role, custom_split) VALUES (?, ?, ?, ?)'
       );
       for (const worker of workers) {
-        insertWorker.run(gigId, worker.worker_id, worker.role, worker.custom_split || null);
+        insertWorker.run(gigId, worker.worker_id, worker.role, worker.custom_split ?? null);
       }
     }
 

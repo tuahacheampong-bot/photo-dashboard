@@ -10,7 +10,15 @@ function CallbackContent() {
 
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
-  const [exchangeResult, setExchangeResult] = useState<any>(null);
+  interface ExchangeResult {
+    refresh_token?: string;
+    access_token?: string;
+    expires_in?: number;
+    error?: string;
+    details?: string;
+  }
+
+  const [exchangeResult, setExchangeResult] = useState<ExchangeResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleExchange = async () => {
@@ -28,7 +36,7 @@ function CallbackContent() {
       });
       const data = await res.json();
       setExchangeResult(data);
-    } catch (err) {
+    } catch {
       setExchangeResult({ error: 'Network error' });
     }
     setLoading(false);

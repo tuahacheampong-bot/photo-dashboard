@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 
 function Page() {
   const params = useSearchParams();
@@ -10,7 +10,15 @@ function Page() {
 
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
-  const [result, setResult] = useState<any>(null);
+  interface TokenResult {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    error?: string;
+    details?: string;
+  }
+
+  const [result, setResult] = useState<TokenResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -120,7 +128,7 @@ function Page() {
                       <p className="text-sm font-bold text-gray-900">Access Token</p>
                       <p className="text-xs text-gray-500">Expires in {result.expires_in}s — NOT the one you need</p>
                     </div>
-                    <button onClick={() => copy(result.access_token, 'access')}
+                    <button onClick={() => copy(result.access_token || '', 'access')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                         copiedField === 'access' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}>
@@ -128,7 +136,7 @@ function Page() {
                     </button>
                   </div>
                   <div className="bg-white p-3 rounded-lg border border-gray-200 font-mono text-xs break-all text-gray-600">
-                    {result.access_token}
+                    {result.access_token || ''}
                   </div>
                 </div>
 
@@ -139,7 +147,7 @@ function Page() {
                       <p className="text-base font-bold text-green-900">⭐ Refresh Token</p>
                       <p className="text-sm text-green-700 font-semibold">Copy this and paste it in Settings</p>
                     </div>
-                    <button onClick={() => copy(result.refresh_token, 'refresh')}
+                    <button onClick={() => copy(result.refresh_token || '', 'refresh')}
                       className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
                         copiedField === 'refresh' ? 'bg-green-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-800'
                       }`}>
