@@ -11,7 +11,13 @@ function getDb() {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
   const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-  if (isVercel && tursoUrl && tursoToken) {
+  if (isVercel) {
+    if (!tursoUrl || !tursoToken) {
+      throw new Error(
+        'Turso database not configured. Please set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN environment variables in Vercel. ' +
+        'Get them from https://turso.tech after creating a database.'
+      );
+    }
     // Use Turso (libSQL) on Vercel
     const { createClient } = require('@libsql/client');
     db = createClient({
