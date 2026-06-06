@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -62,6 +63,9 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-gray-500 mt-6">
             Default: admin@photo.com / admin123
+          </p>
+          <p className="text-center text-sm text-gray-500 mt-4">
+            Don't have an account? <Link href="/signup" className="text-gray-900 font-bold hover:underline">Sign Up</Link>
           </p>
         </div>
       </div>
