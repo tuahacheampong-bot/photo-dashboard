@@ -6,7 +6,7 @@ export async function GET() {
     const db = await getDb();
     
     // Test database connection
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const userCount = await db.prepare('SELECT COUNT(*) as count FROM users').get();
     const tables = await db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
     
     return NextResponse.json({
