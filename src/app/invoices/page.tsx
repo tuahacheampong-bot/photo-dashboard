@@ -55,6 +55,7 @@ export default function InvoicesPage() {
   const [syncOk, setSyncOk] = useState(true);
   const [zohoReady, setZohoReady] = useState(false);
   const [showGigModal, setShowGigModal] = useState<Invoice | null>(null);
+  const [showLinkGigModal, setShowLinkGigModal] = useState<Invoice | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
 
@@ -141,6 +142,20 @@ export default function InvoicesPage() {
     if (!confirm('Delete this invoice?')) return;
     const res = await fetch(`/api/invoices?id=${id}`, { method: 'DELETE' });
     if (res.ok) refreshInvoices();
+  };
+
+  const linkGigToInvoice = async (data: LinkGigData) => {
+    const res = await fetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'link_gig_to_invoice', ...data }),
+    });
+    const result = await res.json();
+    if (res.ok) {
+      refreshInvoices();
+    } else {
+      alert(result.error || 'Failed to link gig');
+    }
   };
 
   // Invoices eligible for gig creation (no gig linked)
@@ -258,9 +273,15 @@ export default function InvoicesPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           {hasGig ? (
-                            <Link href={`/gigs/${inv.gig_id}`} className="text-sm text-gray-600 hover:text-gray-900 font-semibold">
-                              View Gig →
-                            </Link>
+                            <>
+                              <Link href={`/gigs/${inv.gig_id}`} className="text-sm text-gray-600 hover:text-gray-900 font-semibold">
+                                View Gig →
+                              </Link>
+                              <button onClick={() => setShowLinkGigModal(inv)}
+                                className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition">
+                                Link Gig
+                              </button>
+                            </>
                           ) : (
                             <button onClick={() => setShowGigModal(inv)}
                               className="text-sm bg-gray-900 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-gray-800 transition">
@@ -284,6 +305,7 @@ export default function InvoicesPage() {
 
       {showModal && <CreateModal onClose={() => setShowModal(false)} />}
       {showGigModal && <GigFromInvoiceModal invoice={showGigModal} onClose={() => setShowGigModal(null)} onSubmit={createGigFromInvoice} />}
+      {showLinkGigModal && <LinkGigToInvoiceModal invoice={showLinkGigModal} onClose={() => setShowLinkGigModal(null)} onSubmit={linkGigToInvoice} />}
       {showBatchModal && (
         <BatchGigFromInvoiceModal
           invoices={selectedLinkable}
@@ -561,6 +583,85 @@ function GigFromInvoiceModal({ invoice, onClose, onSubmit }: { invoice: Invoice;
             <button type="submit" disabled={submitting || !workersLoaded}
               className="bg-gray-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-gray-800 disabled:opacity-50">
               {submitting ? 'Creating...' : !workersLoaded ? 'Loading...' : 'Create Gig'}
+            </button>
+            <button type="button" onClick={onClose} className="px-6 py-2.5 border-2 border-gray-300 rounded-xl font-bold hover:bg-gray-50">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface LinkGigData {
+  invoice_id: number;
+  gig_id: number;
+}
+
+function LinkGigToInvoiceModal({ invoice, onClose, onSubmit }: { invoice: Invoice; onClose: () => void; onSubmit: (data: LinkGigData) => void }) {
+  const [gigs, setGigs] = useState<{ id: number; title: string; client_name: string; gig_date: string; invoice_reference?: string | null }[]>([]);
+  const [gigsLoaded, setGigsLoaded] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ gig_id: '' });
+
+  useEffect(() => {
+    fetch('/api/gigs')
+      .then(r => r.json())
+      .then((d: { id: number; title: string; client_name: string; gig_date: string; invoice_reference?: string | null }[]) => {
+        setGigs(d);
+        setGigsLoaded(true);
+      })
+      .catch(() => setGigsLoaded(true));
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    await onSubmit({ invoice_id: invoice.id, gig_id: Number(form.gig_id) });
+    setSubmitting(false);
+  };
+
+  // Find gigs that don't already have this invoice linked (or any invoice linked)
+  const availableGigs = gigs.filter(g => !g.invoice_reference || g.invoice_reference === invoice.invoice_number);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl font-bold mb-1">Link Existing Gig to Invoice</h3>
+        <p className="text-sm text-gray-600 font-semibold mb-4">{invoice.invoice_number} • {invoice.client_name} • {formatCurrency(invoice.total_amount)}</p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {availableGigs.length === 0 && (
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
+              <p className="text-yellow-800 text-sm font-bold">No available gigs to link.</p>
+              <p className="text-yellow-700 text-xs mt-1">All gigs are already linked to invoices, or you need to create a new gig first.</p>
+            </div>
+          )}
+
+          {availableGigs.length > 0 && (
+            <div>
+              <label className="block text-sm font-bold text-gray-800 mb-2">Select Gig to Link</label>
+              <div className="space-y-2 max-h-60 overflow-y-auto border-2 border-gray-200 rounded-xl p-2">
+                {availableGigs.map(gig => (
+                  <label key={gig.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border-2 cursor-pointer transition hover:border-blue-500 hover:bg-blue-50">
+                    <input type="radio" name="gig_id" value={gig.id}
+                      onChange={e => setForm({ ...form, gig_id: e.target.value })}
+                      className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500" />
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{gig.title}</p>
+                      <p className="text-xs text-gray-500">{gig.client_name} • {gig.gig_date}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={submitting || !gigsLoaded}
+              className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition disabled:opacity-50">
+              {submitting ? 'Linking...' : !gigsLoaded ? 'Loading...' : 'Link Gig'}
             </button>
             <button type="button" onClick={onClose} className="px-6 py-2.5 border-2 border-gray-300 rounded-xl font-bold hover:bg-gray-50">Cancel</button>
           </div>

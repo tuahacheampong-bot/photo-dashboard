@@ -169,6 +169,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ gig_id: gigId, message: 'Gig created from invoice' });
     }
 
+    // Link existing gig to invoice
+    if (body.action === 'link_gig_to_invoice') {
+      const { invoice_id, gig_id } = body;
+
+      if (!invoice_id || !gig_id) {
+        return NextResponse.json({ error: 'invoice_id and gig_id are required' }, { status: 400 });
+      }
+
+      const invoice = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoice_id) as Invoice | null;
+      if (!invoice) {
+        return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+      }
+
+      if (invoice.gig_id) {
+        return NextResponse.json({ error: 'This invoice already has a gig linked', gig_id: invoice.gig_id }, { status: 400 });
+      }
+
+      const gig = await db.prepare('SELECT * FROM gigs WHERE id = ?').get(gig_id) as any | null;
+      if (!gig) {
+        return NextResponse.json({ error: 'Gig not found' }, { status: 404 });
+      }
+
+      // Link invoice to gig
+      await db.prepare('UPDATE invoices SET gig_id = ? WHERE id = ?').run(gig_id, invoice_id);
+
+      // Update gig with invoice reference
+      await db.prepare('UPDATE gigs SET invoice_reference = ? WHERE id = ?').run(invoice.invoice_number, gig_id);
+
+      // If invoice has been paid, record the payment
+      if (invoice.amount_paid > 0) {
+        // Check for existing payment for this gig
+        const existingPayment = await db.prepare(
+          'SELECT id FROM client_payments WHERE gig_id = ?'
+        ).get(gig_id);
+
+        if (!existingPayment && invoice.amount_paid <= invoice.total_amount && invoice.amount_paid > 0) {
+          const paymentDate = invoice.due_date || new Date().toISOString().split('T')[0];
+          db.prepare(`
+            INSERT INTO client_payments (gig_id, invoice_id, amount, payment_date, payment_method, notes)
+            VALUES (?, ?, ?, ?, 'bank_transfer', ?)
+          `).run(
+            gig_id,
+            invoice_id,
+            invoice.amount_paid,
+            invoice.due_date || new Date().toISOString().split('T')[0],
+            `Payment from Zoho Invoice ${invoice.invoice_number}`
+          );
+        }
+      }
+
+      return NextResponse.json({ message: 'Gig linked to invoice successfully' });
+    }
+
     // Regular invoice creation
     const {
       gig_id, invoice_number, client_name, amount, tax_amount,
