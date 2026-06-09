@@ -76,11 +76,11 @@ export default function ReportsPage() {
   const fetchReports = async () => {
     setLoading(true);
     const [summaryRes, gigRes, workerRes, monthlyRes, expenseRes] = await Promise.all([
-      fetch(`/api/reports?type=summary&period=${period}`),
-      fetch(`/api/reports?type=by_gig&period=${period}`),
-      fetch(`/api/reports?type=by_worker`),
-      fetch(`/api/reports?type=monthly`),
-      fetch(`/api/reports?type=expense_by_category`),
+      fetch(`/api/reports?type=summary&period=${period}`, { credentials: 'include' }),
+      fetch(`/api/reports?type=by_gig&period=${period}`, { credentials: 'include' }),
+      fetch(`/api/reports?type=by_worker`, { credentials: 'include' }),
+      fetch(`/api/reports?type=monthly`, { credentials: 'include' }),
+      fetch(`/api/reports?type=expense_by_category`, { credentials: 'include' }),
     ]);
     setSummary(await summaryRes.json());
     setByGig(await gigRes.json());

@@ -43,7 +43,18 @@ export async function GET(request: NextRequest) {
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
-    query += ' ORDER BY i.created_at DESC';
+    
+    // Get sort parameter
+    const sortBy = searchParams.get('sort') || 'invoice_number';
+    const sortOrder = searchParams.get('order') || 'asc';
+    
+    const validSortFields = ['invoice_number', 'client_name', 'total_amount', 'status', 'created_at', 'due_date'];
+    const validSortOrders = ['asc', 'desc'];
+    
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'invoice_number';
+    const sortDir = validSortOrders.includes(sortOrder) ? sortOrder : 'asc';
+    
+    query += ` ORDER BY i.${sortField} ${sortDir.toUpperCase()}`;
 
     const invoices = await db.prepare(query).all(...params) as InvoiceWithGig[];
     return NextResponse.json(invoices);

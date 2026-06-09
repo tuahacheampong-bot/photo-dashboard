@@ -55,7 +55,7 @@ export default function ExpensesPage() {
     if (categoryFilter !== 'all') params.set('category', categoryFilter);
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
-    const res = await fetch(`/api/expenses?${params}`);
+    const res = await fetch(`/api/expenses?${params}`, { credentials: 'include' });
     setData(await res.json());
     setLoading(false);
   }, [categoryFilter, dateFrom, dateTo]);
@@ -72,6 +72,7 @@ export default function ExpensesPage() {
     const res = await fetch('/api/expenses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(formData),
     });
     if (res.ok) { setShowModal(false); fetchExpenses(); }
@@ -81,6 +82,7 @@ export default function ExpensesPage() {
     const res = await fetch('/api/expenses/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ name }),
     });
     if (res.ok) { setShowCategoryModal(false); fetchExpenses(); }
@@ -88,7 +90,7 @@ export default function ExpensesPage() {
 
   const handleDeleteCategory = async (id: number) => {
     if (!confirm('Delete this category?')) return;
-    await fetch(`/api/expenses/categories?id=${id}`, { method: 'DELETE' });
+    await fetch(`/api/expenses/categories?id=${id}`, { method: 'DELETE', credentials: 'include' });
     fetchExpenses();
   };
 

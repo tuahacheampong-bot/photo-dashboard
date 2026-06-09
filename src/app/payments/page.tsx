@@ -43,7 +43,7 @@ export default function PaymentsPage() {
   const [tab, setTab] = useState<'client' | 'worker'>('client');
 
   const fetchPayments = async () => {
-    const res = await fetch('/api/payments?type=all');
+    const res = await fetch('/api/payments?type=all', { credentials: 'include' });
     setPayments(await res.json());
     setLoading(false);
   };

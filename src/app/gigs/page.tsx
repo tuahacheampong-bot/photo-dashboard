@@ -46,7 +46,7 @@ export default function GigsPage() {
     if (search) p.set('search', search);
     if (dateFrom) p.set('date_from', dateFrom);
     if (dateTo) p.set('date_to', dateTo);
-    const res = await fetch(`/api/gigs?${p}`);
+    const res = await fetch(`/api/gigs?${p}`, { credentials: 'include' });
     setGigs(await res.json());
     setLoading(false);
   };
@@ -60,14 +60,14 @@ export default function GigsPage() {
 
   const deleteGig = async (id: number) => {
     if (!confirm('Delete this gig?')) return;
-    await fetch(`/api/gigs/${id}`, { method: 'DELETE' });
+    await fetch(`/api/gigs/${id}`, { method: 'DELETE', credentials: 'include' });
     fetchGigs();
   };
 
   const deleteSelected = async () => {
     if (!confirm(`Delete ${selected.length} gigs?`)) return;
     for (const id of selected) {
-      await fetch(`/api/gigs/${id}`, { method: 'DELETE' });
+      await fetch(`/api/gigs/${id}`, { method: 'DELETE', credentials: 'include' });
     }
     setSelected([]);
     fetchGigs();

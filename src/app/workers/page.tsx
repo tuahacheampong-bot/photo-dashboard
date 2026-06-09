@@ -54,7 +54,7 @@ export default function WorkersPage() {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (skillFilter !== 'all') params.set('skill', skillFilter);
-    const res = await fetch(`/api/workers?${params}`);
+    const res = await fetch(`/api/workers?${params}`, { credentials: 'include' });
     setWorkers(await res.json());
     setLoading(false);
   };
@@ -70,6 +70,7 @@ export default function WorkersPage() {
     const res = await fetch('/api/workers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(data),
     });
     if (res.ok) { setShowCreateModal(false); fetchWorkers(); }
@@ -81,6 +82,7 @@ export default function WorkersPage() {
     const res = await fetch(`/api/workers/${editWorker.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(data),
     });
     if (res.ok) { setEditWorker(null); fetchWorkers(); }
@@ -89,7 +91,7 @@ export default function WorkersPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this worker?')) return;
-    await fetch(`/api/workers/${id}`, { method: 'DELETE' });
+    await fetch(`/api/workers/${id}`, { method: 'DELETE', credentials: 'include' });
     fetchWorkers();
   };
 

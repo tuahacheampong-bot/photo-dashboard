@@ -61,6 +61,11 @@ export default function InvoicesPage() {
 
   const loadedRef = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50);
+  const [sortBy, setSortBy] = useState('invoice_number');
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [totalPages, setTotalPages] = useState(1);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -68,17 +73,30 @@ export default function InvoicesPage() {
       const p = new URLSearchParams();
       if (statusFilter !== 'all') p.set('status', statusFilter);
       if (search) p.set('search', search);
-      const res = await fetch(`/api/invoices?${p}&_=${refreshKey}`);
+      p.set('page', currentPage.toString());
+      p.set('limit', itemsPerPage.toString());
+      p.set('sort', sortBy);
+      p.set('order', sortOrder);
+      const res = await fetch(`/api/invoices?${p}&_=${refreshKey}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
-      setInvoices(Array.isArray(data) ? data : []);
+      // Handle both array response and paginated response
+      if (Array.isArray(data)) {
+        setInvoices(data);
+        setTotalPages(1);
+      } else if (data.invoices) {
+        setInvoices(data.invoices);
+        setTotalPages(data.totalPages || 1);
+      } else {
+        setInvoices([]);
+        setTotalPages(1);
+      }
     } catch {
       setInvoices([]);
+      setTotalPages(1);
     }
     setLoading(false);
   };
-
-  const refreshInvoices = () => setRefreshKey(k => k + 1);
 
   useEffect(() => {
     if (!loadedRef.current) {
@@ -89,7 +107,7 @@ export default function InvoicesPage() {
         .then((d: ZohoSettings) => setZohoReady(d.configured && d.refresh_token !== '***'))
         .catch(() => {});
     }
-  }, [statusFilter, search, refreshKey, fetchInvoices]);
+  }, [statusFilter, search, refreshKey, fetchInvoices, currentPage, sortBy, sortOrder]);
 
   const sync = async () => {
     setSyncing(true);
@@ -111,6 +129,24 @@ export default function InvoicesPage() {
     }
     setSyncing(false);
     setTimeout(() => setSyncMsg(null), 5000);
+  };
+
+  const refreshInvoices = () => setRefreshKey(k => k + 1);
+
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
   };
 
   const createGigFromInvoice = async (data: CreateGigData) => {
@@ -244,12 +280,48 @@ export default function InvoicesPage() {
                         className="w-4 h-4 rounded" />
                     )}
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase">Invoice #</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase">Client</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase hidden sm:table-cell">Amount</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Paid</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Balance</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('invoice_number')}>
+                    Invoice #
+                    {sortBy === 'invoice_number' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none hidden sm:table-cell"
+                    onClick={() => handleSort('client_name')}>
+                    Client
+                    {sortBy === 'client_name' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none hidden sm:table-cell"
+                    onClick={() => handleSort('total_amount')}>
+                    Amount
+                    {sortBy === 'total_amount' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
+                    onClick={() => handleSort('amount_paid')}>
+                    Paid
+                    {sortBy === 'amount_paid' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
+                    onClick={() => handleSort('balance')}>
+                    Balance
+                    {sortBy === 'balance' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('status')}>
+                    Status
+                    {sortBy === 'status' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
                   <th className="text-left px-4 py-3 text-xs font-bold text-gray-600 uppercase">Actions</th>
                 </tr>
               </thead>
