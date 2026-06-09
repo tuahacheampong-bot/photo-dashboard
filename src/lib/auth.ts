@@ -58,7 +58,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: '/login',
   },
-  csrf: false,
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
